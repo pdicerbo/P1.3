@@ -10,7 +10,7 @@ Course key:  Mhpc;2015-2016k3y
 
 New material will be uploaded frequently,
 
-Remeber to set a second remote
+Remember to set a second remote
 
 .. code::
 
