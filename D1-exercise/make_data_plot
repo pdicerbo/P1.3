@@ -1,0 +1,4 @@
+#!/bin/bash
+
+cat $1 | grep procs | awk '{print $4}' >> data_to_plot
+cat $1 | grep Bandwidth | awk '{print $3}' >> data_band
