@@ -63,9 +63,9 @@ int main(int argc, char** argv){
     /* this is needed to avoid int overflow */
     ndata *= 8 * nproc;
 
-    printf("\tTotal data transfered: %lg GB", ndata);
+    printf("\tTotal data transfered: %lg GB; %lg", ndata, ndata / nproc);
     printf("\n\tTotal time: %lg s", (t_end - t_start));
-    band = ndata / (t_end - t_start);
+    band = 2 * nproc / (t_end - t_start);
     printf("\n\tMesured Bandwidth: %lg GB/s\n", band);
     printf("\n================================================\n");
   }
