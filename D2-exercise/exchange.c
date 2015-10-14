@@ -6,7 +6,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#define SIZE 500000000
+#define SIZE 1000000000
 
 double seconds(){
   /* Return the second elapsed since Epoch (00:00:00 UTC, January 1, 1970) */
@@ -41,6 +41,26 @@ int main(int argc, char** argv){
     exit(0);
   }
 
+  /* OPTIMIZED VERSION: */
+  /* INITIALIZATION */
+  for(j = 0; j < SIZE; j++)
+    first_arr[j] = ((double) j - SIZE)/SIZE;
+
+  /* EXCHANGE DATA */
+  t_start = seconds();
+
+  MPI_Isend(first_arr, SIZE, MPI_DOUBLE, 1 - iam, tag, MPI_COMM_WORLD, &send_request);
+  MPI_Recv(second_arr, SIZE, MPI_DOUBLE, 1 - iam, tag, MPI_COMM_WORLD, &status);
+
+  t_end = seconds();
+  printf("\n===============================================\n");
+  printf("\tRESULTS FROM PROCESS %d;\n", iam);
+  printf("\tfirst_arr[0] = %lg;\tsecond_arr[0] = %lg\n", first_arr[0], second_arr[0]);
+  printf("\ttotal time: %lg", (t_end - t_start));
+  printf("\n===============================================\n");
+
+  MPI_Finalize();
+
   /* INITIALIZATION */
   /* if(iam == 0){ */
   /*   for(j = 0; j < SIZE; j++) */
@@ -69,24 +89,6 @@ int main(int argc, char** argv){
   /*   printf("\tfirst_arr[0] = %lg;\tsecond_arr[0] = %lg\n", first_arr[0], second_arr[0]); */
   /*   printf("\ttotal time: %lg\n=================================\n", (t_end - t_start)); */
   /* } */
-
-  /* OPTIMIZATION: */
-  /* INITIALIZATION */
-  for(j = 0; j < SIZE; j++)
-    first_arr[j] = ((double) j - SIZE)/SIZE;
-
-  /* EXCHANGE DATA */
-  t_start = seconds();
-
-  MPI_Isend(first_arr, SIZE, MPI_DOUBLE, 1 - iam, tag, MPI_COMM_WORLD, &send_request);
-  MPI_Recv(second_arr, SIZE, MPI_DOUBLE, 1 - iam, tag, MPI_COMM_WORLD, &status);
-
-  t_end = seconds();
-  printf("\n=================================\n\tRESULTS FROM PROCESS %d;\n", iam);
-  printf("\tfirst_arr[0] = %lg;\tsecond_arr[0] = %lg\n", first_arr[0], second_arr[0]);
-  printf("\ttotal time: %lg\n=================================\n", (t_end - t_start));
-
-  MPI_Finalize();
 
   return 0;
 }
