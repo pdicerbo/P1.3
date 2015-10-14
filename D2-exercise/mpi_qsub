@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#PBS -N pi_calc
+#PBS -l walltime=00:02:00
+#PBS -l nodes=1:ppn=20
+#PBS -q reserved3
+
+module load openmpi/1.8.3/gnu/4.9.2
+
+cd $PBS_O_WORKDIR
+
+# mpicc -o hello_world.x hello_world.c
+mpicc -o integ.x integ.c
+
+mpirun -np 20 integ.x
+
+# for NP in 2 4 6 8 10 14 16 20
+# do
+# # mpirun -np $NP hello_world.x
+# mpirun -np $NP broadcast.x $NP
+# done
