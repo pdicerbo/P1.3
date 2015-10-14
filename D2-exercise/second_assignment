@@ -9,13 +9,8 @@ module load openmpi/1.8.3/gnu/4.9.2
 
 cd $PBS_O_WORKDIR
 
-# mpicc -o hello_world.x hello_world.c
-mpicc -o exchange.x exchange.c
+mpicc -o top_exch.x top_exch.c
+# mpicc -o exchange.x exchange.c
 
-mpirun -np 2 exchange.x
-
-# for NP in 2 4 6 8 10 14 16 20
-# do
-# # mpirun -np $NP hello_world.x
-# mpirun -np $NP broadcast.x $NP
-# done
+mpirun -np 2 top_exch.x
+# mpirun -np 2 exchange.x
