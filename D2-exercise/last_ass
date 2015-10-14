@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#PBS -N data_distr
+#PBS -l walltime=00:02:00
+#PBS -l nodes=1:ppn=20
+#PBS -q reserved3
+
+module load openmpi/1.8.3/gnu/4.9.2
+
+cd $PBS_O_WORKDIR
+
+rm *.x
+
+mpicc -o distrib_data.x distrib_data.c
+
+mpirun -np 3 distrib_data.x
