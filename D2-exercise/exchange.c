@@ -6,7 +6,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#define SIZE 100000000
+#define SIZE 500000000
 
 double seconds(){
   /* Return the second elapsed since Epoch (00:00:00 UTC, January 1, 1970) */
@@ -42,33 +42,49 @@ int main(int argc, char** argv){
   }
 
   /* INITIALIZATION */
-  if(iam == 0){
-    for(j = 0; j < SIZE; j++)
-      first_arr[j] = ((double) j - SIZE)/SIZE;
-  }
-  else{
-    for(j = 0; j < SIZE; j++)
-      second_arr[j] = ((double) j + SIZE)/SIZE;
-  }
+  /* if(iam == 0){ */
+  /*   for(j = 0; j < SIZE; j++) */
+  /*     first_arr[j] = ((double) j - SIZE)/SIZE; */
+  /* } */
+  /* else{ */
+  /*   for(j = 0; j < SIZE; j++) */
+  /*     second_arr[j] = ((double) j + SIZE)/SIZE; */
+  /* } */
+
+  /* /\* EXCHANGE DATA *\/ */
+  /* if(iam == 0){ */
+  /*   MPI_Isend(first_arr, SIZE, MPI_DOUBLE, 1, tag, MPI_COMM_WORLD, &send_request); */
+  /*   MPI_Recv(second_arr, SIZE, MPI_DOUBLE, 1, tag, MPI_COMM_WORLD, &status); */
+  /*   /\* MPI_Irecv(second_arr, SIZE, MPI_DOUBLE, 1, tag, MPI_COMM_WORLD, &rec_request); *\/ */
+  /* } */
+
+  /* if(iam == 1){ */
+  /*   t_start = seconds(); */
+  /*   MPI_Isend(second_arr, SIZE, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &send_request); */
+  /*   MPI_Recv(first_arr, SIZE, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status); */
+  /*   /\* MPI_Irecv(first_arr, SIZE, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &rec_request); *\/ */
+  /*   /\* MPI_Wait(&rec_request, &status); *\/ */
+  /*   t_end = seconds(); */
+  /*   printf("\n\tRESULTS FROM PROCESS %d;\n", iam); */
+  /*   printf("\tfirst_arr[0] = %lg;\tsecond_arr[0] = %lg\n", first_arr[0], second_arr[0]); */
+  /*   printf("\ttotal time: %lg\n=================================\n", (t_end - t_start)); */
+  /* } */
+
+  /* OPTIMIZATION: */
+  /* INITIALIZATION */
+  for(j = 0; j < SIZE; j++)
+    first_arr[j] = ((double) j - SIZE)/SIZE;
 
   /* EXCHANGE DATA */
-  if(iam == 0){
-    MPI_Isend(first_arr, SIZE, MPI_DOUBLE, 1, tag, MPI_COMM_WORLD, &send_request);
-    MPI_Recv(second_arr, SIZE, MPI_DOUBLE, 1, tag, MPI_COMM_WORLD, &status);
-    /* MPI_Irecv(second_arr, SIZE, MPI_DOUBLE, 1, tag, MPI_COMM_WORLD, &rec_request); */
-  }
+  t_start = seconds();
 
-  if(iam == 1){
-    t_start = seconds();
-    MPI_Isend(second_arr, SIZE, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &send_request);
-    MPI_Recv(first_arr, SIZE, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &status);
-    /* MPI_Irecv(first_arr, SIZE, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD, &rec_request); */
-    /* MPI_Wait(&rec_request, &status); */
-    t_end = seconds();
-    printf("\n\tRESULTS FROM PROCESS %d;\n", iam);
-    printf("\tfirst_arr[0] = %lg;\tsecond_arr[0] = %lg\n", first_arr[0], second_arr[0]);
-    printf("\ttotal time: %lg\n=================================\n", (t_end - t_start));
-  }
+  MPI_Isend(first_arr, SIZE, MPI_DOUBLE, 1 - iam, tag, MPI_COMM_WORLD, &send_request);
+  MPI_Recv(second_arr, SIZE, MPI_DOUBLE, 1 - iam, tag, MPI_COMM_WORLD, &status);
+
+  t_end = seconds();
+  printf("\n=================================\n\tRESULTS FROM PROCESS %d;\n", iam);
+  printf("\tfirst_arr[0] = %lg;\tsecond_arr[0] = %lg\n", first_arr[0], second_arr[0]);
+  printf("\ttotal time: %lg\n=================================\n", (t_end - t_start));
 
   MPI_Finalize();
 
