@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <mpi.h>
 
-#define SIZE 4
+#define SIZE 9
 
 void print_lines(double*, int, int);
 
 int main(int argc, char** argv){
 
-  int MyRank, NPE, i, j, trasl;
+  int MyRank, NPE, i, j, trasl, loop_ctrl;
   int block, rest, process;
   int tag = 42;
 
@@ -31,23 +31,34 @@ int main(int argc, char** argv){
   block = SIZE / NPE;
   rest = SIZE % NPE;
 
-  trasl = (block + rest) * MyRank;
+  MyRank == 0 ? (loop_ctrl = 0) : (loop_ctrl = 1);
 
-  if(rest != 0 && MyRank < rest)
+  if(rest != 0 && MyRank < rest){
     block += 1;
+    trasl = (block - loop_ctrl + 1) * MyRank;
+  }
+  else if(rest != 0){
+    trasl = (block + 1) * rest + block * (MyRank - rest);// (block - loop_ctrl + 1) * MyRank;
+    /* trasl = (block + rest - loop_ctrl) * MyRank; */
+  }
+  else
+    trasl = (block - loop_ctrl + 1) * MyRank;
 
-  /* BUFFER ALLOCATION */
+
+  printf("\n\tMyRank: %d; block = %d; rest = %d; trasl = %d;\n", MyRank, block, rest, trasl);
+
   tmp_buf = (double*)malloc(SIZE * block * sizeof(double));
 
   for(i = 0; i < block; i++){
     for(j = 0; j < SIZE; j++){
-      if(j = MyRank + trasl){
+      if(j == trasl){
+      /* if(j == (MyRank + trasl)){ */
 	tmp_buf[j + i*SIZE] = 1;
-	trasl += 1;
       }
       else
 	tmp_buf[j + i*SIZE] = 0;
     }
+    trasl += 1;
   }
 
   if(MyRank == 0){

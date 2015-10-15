@@ -13,4 +13,4 @@ rm *.x
 
 mpicc -o distrib_data.x distrib_data.c
 
-mpirun -np 3 distrib_data.x
+mpirun -np 7 distrib_data.x
