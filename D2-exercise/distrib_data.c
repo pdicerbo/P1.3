@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <mpi.h>
 
-#define SIZE 9
+#define SIZE 10
 
 void print_lines(double*, int, int);
 
 int main(int argc, char** argv){
 
-  int MyRank, NPE, i, j, trasl, loop_ctrl;
+  int MyRank, NPE, i, j, trasl, tmp_idx;
   int block, rest, process;
   int tag = 42;
 
@@ -31,59 +31,114 @@ int main(int argc, char** argv){
   block = SIZE / NPE;
   rest = SIZE % NPE;
 
-  MyRank == 0 ? (loop_ctrl = 0) : (loop_ctrl = 1);
-
   if(rest != 0 && MyRank < rest){
     block += 1;
-    trasl = (block - loop_ctrl + 1) * MyRank;
+    trasl = block * MyRank;
   }
-  else if(rest != 0){
-    trasl = (block + 1) * rest + block * (MyRank - rest);// (block - loop_ctrl + 1) * MyRank;
-    /* trasl = (block + rest - loop_ctrl) * MyRank; */
-  }
+  else if(rest != 0)
+    trasl = (block + 1) * rest + block * (MyRank - rest);
   else
-    trasl = (block - loop_ctrl + 1) * MyRank;
-
-
-  printf("\n\tMyRank: %d; block = %d; rest = %d; trasl = %d;\n", MyRank, block, rest, trasl);
+    trasl = block * MyRank;
 
   tmp_buf = (double*)malloc(SIZE * block * sizeof(double));
 
   for(i = 0; i < block; i++){
+    tmp_idx = i*SIZE;
     for(j = 0; j < SIZE; j++){
       if(j == trasl){
-      /* if(j == (MyRank + trasl)){ */
-	tmp_buf[j + i*SIZE] = 1;
+	tmp_buf[j + tmp_idx] = 1;
       }
       else
-	tmp_buf[j + i*SIZE] = 0;
+	tmp_buf[j + tmp_idx] = 0;
     }
     trasl += 1;
   }
 
   if(MyRank == 0){
-    printf("\n=============================\n");
-    printf("\tPRINTING MATRIX:\n");
 
-    print_lines(tmp_buf, SIZE, block);
+#ifdef DEBUG
 
-    for(process = 1; process < NPE; process++){
-      if(rest != 0 && process < rest){
-	MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	print_lines(tmp_buf, SIZE, block);
+    if(SIZE <= 10){
+      /* print matrix */
+      printf("\n=============================\n");
+      printf("\tPRINTING MATRIX:\n\n");
+      
+      print_lines(tmp_buf, SIZE, block);
+      
+      for(process = 1; process < NPE; process++){
+	if( (rest != 0 && process < rest) || rest == 0 ){
+	  MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+	  print_lines(tmp_buf, SIZE, block);
+	}
+	else{
+	  MPI_Recv(tmp_buf, SIZE*(block - 1), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+	  print_lines(tmp_buf, SIZE, block - 1);
+	}
       }
-      else if(rest != 0 && process >= rest){
-	MPI_Recv(tmp_buf, SIZE*(block - 1), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	print_lines(tmp_buf, SIZE, block - 1);
-      }
-      else{
-	MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	print_lines(tmp_buf, SIZE, block);
+      printf("\n=============================\n");
+    }
+    else{ 
+      /* write in binary file */
+      FILE *fp;
+      fp = fopen("matrix.dat", "w");
+      fwrite(tmp_buf, sizeof(double), SIZE*block, fp);
+      for(process = 1; process < NPE; process++){
+	if((rest != 0 && process < rest) || rest == 0){
+	  MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+	  fwrite(tmp_buf, sizeof(double), SIZE*block, fp);
+	}
+	else{
+	  MPI_Recv(tmp_buf, SIZE*(block - 1), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+	  fwrite(tmp_buf, sizeof(double), SIZE*(block-1), fp);
+	}
       }
     }
+
+#else
+
+    double* def_array;
+    int *rec_count, *displs; 
+    def_array = (double*)malloc(SIZE*SIZE*sizeof(double));
+    rec_count = (int*)malloc(NPE*sizeof(int));
+    displs = (int*)malloc(NPE*sizeof(int));
+
+    rec_count[0] = SIZE * block;
+    displs[0] = 0;
+
+    for(process = 1; process < NPE; process++){
+      if((rest != 0 && process < rest) || rest == 0){
+	rec_count[process] = SIZE * block;
+	displs[process] = SIZE * block + displs[process - 1];
+      }
+      else{
+	rec_count[process] = SIZE * (block - 1);
+	displs[process] = SIZE * (block - 1) + displs[process - 1];
+      }
+    }
+
+    MPI_Gatherv(tmp_buf, SIZE*block, MPI_DOUBLE, def_array, rec_count, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    printf("\n\tDone\n");
+    /* print_lines(def_array, SIZE, SIZE); */
+
+#endif /* DEBUG */
+
   }
+
   else{
+
+#ifdef DEBUG
+
     MPI_Send(tmp_buf, SIZE*block, MPI_DOUBLE, 0, tag, MPI_COMM_WORLD);
+
+#else
+
+    int *rec_count, *displs;
+    double *def_array;
+
+    MPI_Gatherv(tmp_buf, SIZE*block, MPI_DOUBLE, def_array, rec_count, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+#endif /* DEBUG */
   }
  
   MPI_Finalize();

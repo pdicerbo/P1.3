@@ -9,8 +9,9 @@ module load openmpi/1.8.3/gnu/4.9.2
 
 cd $PBS_O_WORKDIR
 
-rm *.x
+# rm *.x
 
-mpicc -o distrib_data.x distrib_data.c
+# mpicc -o distrib_data.x distrib_data.c
+mpicc -DDEBUG -o distrib_data.x distrib_data.c
 
-mpirun -np 7 distrib_data.x
+mpirun -np 5 distrib_data.x
