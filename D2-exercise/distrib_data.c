@@ -35,10 +35,8 @@ int main(int argc, char** argv){
     block += 1;
     trasl = block * MyRank;
   }
-  else if(rest != 0)
-    trasl = block * MyRank + rest;
   else
-    trasl = block * MyRank;
+    trasl = block * MyRank + rest;
 
   tmp_buf = (double*)malloc(SIZE * block * sizeof(double));
 
