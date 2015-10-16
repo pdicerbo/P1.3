@@ -33,7 +33,7 @@ int main(int argc, char** argv){
   double *arr_rec, *arr_sum;
   int k;
 
-  MPI_Request first_request, request;
+  MPI_Request first_request, request = MPI_REQUEST_NULL;
   MPI_Status status;
 
   arr_rec  = (double*)malloc(SIZE * SIZE * sizeof(double));
@@ -47,8 +47,13 @@ int main(int argc, char** argv){
   j = 0;
 
   while(j < NPE - 1){
+
+    MPI_Wait(&request, &status);
+
     MPI_Recv(arr_rec, SIZE, MPI_DOUBLE, left, tag, MPI_COMM_WORLD, &status);
-    MPI_Isend(arr_rec, SIZE, MPI_DOUBLE, right, tag, MPI_COMM_WORLD, &request);
+
+    if(j < NPE - 2)
+      MPI_Isend(arr_rec, SIZE, MPI_DOUBLE, right, tag, MPI_COMM_WORLD, &request);
 
     MPI_Wait(&first_request, &status);
 
