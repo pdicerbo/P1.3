@@ -9,18 +9,13 @@ int main(int argc, char** argv){
   int MyRank, NPE, left, right, sum, data_rec, data_send, j;
   int tag = 42;
 
-  int l_ctrl;
-
   MPI_Init(&argc, &argv);
 
   MPI_Comm_rank(MPI_COMM_WORLD, &MyRank);
   MPI_Comm_size(MPI_COMM_WORLD, &NPE);
   
   right = (MyRank + 1) % NPE;
-
-  l_ctrl = 1 / (MyRank + 1); /* == 1 if MyRank==0; == 0 Otherwise */
-
-  left = (MyRank - 1) * (1 - l_ctrl) + (NPE - 1) * l_ctrl;
+  left = (MyRank + NPE - 1) % NPE;
 
   sum = MyRank;
   data_send = MyRank;

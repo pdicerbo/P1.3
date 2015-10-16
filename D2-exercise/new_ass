@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#PBS -N ring
+#PBS -l walltime=00:02:00
+#PBS -l nodes=1:ppn=20
+#PBS -q reserved3
+
+module load openmpi/1.8.3/gnu/4.9.2
+
+cd $PBS_O_WORKDIR
+
+# rm *.x
+
+mpicc -o comm_cycle.x comm_cycle.c
+
+mpirun -np 8 comm_cycle.x
