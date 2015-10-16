@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 
+#define SIZE 10
 
 int main(int argc, char** argv){
 
@@ -16,7 +17,9 @@ int main(int argc, char** argv){
   MPI_Comm_size(MPI_COMM_WORLD, &NPE);
   
   right = (MyRank + 1) % NPE;
+
   l_ctrl = 1 / (MyRank + 1); /* == 1 if MyRank==0; == 0 Otherwise */
+
   left = (MyRank - 1) * (1 - l_ctrl) + (NPE - 1) * l_ctrl;
 
   sum = MyRank;
@@ -30,7 +33,37 @@ int main(int argc, char** argv){
     j++;
   }
   
-  printf("\n\tMyRank is %d of %d; my sum is %d; my left is %d; my right is %d;\n", MyRank, NPE, sum, left, right);
+  /* printf("\n\tMyRank is %d of %d; my sum is %d; my left is %d; my right is %d;\n", MyRank, NPE, sum, left, right); */
+
+  double *arr_rec, *arr_sum;
+  int k;
+
+  MPI_Request first_request, request;
+  MPI_Status status;
+
+  arr_rec  = (double*)malloc(SIZE * SIZE * sizeof(double));
+  arr_sum  = (double*)malloc(SIZE * SIZE * sizeof(double));
+
+  for(j = 0; j < SIZE; j++)
+    arr_sum[j]  = MyRank;
+
+  MPI_Isend(arr_sum, SIZE, MPI_DOUBLE, right, tag, MPI_COMM_WORLD, &first_request);
+
+  j = 0;
+
+  while(j < NPE - 1){
+    MPI_Recv(arr_rec, SIZE, MPI_DOUBLE, left, tag, MPI_COMM_WORLD, &status);
+    MPI_Isend(arr_rec, SIZE, MPI_DOUBLE, right, tag, MPI_COMM_WORLD, &request);
+
+    MPI_Wait(&first_request, &status);
+
+    for(k = 0; k < SIZE; k++)
+      arr_sum[k] += arr_rec[k];
+
+    j++;
+  }
+
+  printf("\n\tMyRank is %d of %d; my arr_sum[%d] = %lg;\n", MyRank, NPE, MyRank, arr_sum[MyRank]);
 
   MPI_Finalize();
 
