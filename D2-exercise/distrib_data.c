@@ -36,7 +36,7 @@ int main(int argc, char** argv){
     trasl = block * MyRank;
   }
   else if(rest != 0)
-    trasl = (block + 1) * rest + block * (MyRank - rest);
+    trasl = block * MyRank + rest;
   else
     trasl = block * MyRank;
 
