@@ -11,7 +11,7 @@ cd $PBS_O_WORKDIR
 
 # rm *.x
 
-# mpicc -DDEBUG -o init_def.x def_initialization_matrix.c
-mpicc -o init_def.x def_initialization_matrix.c
+mpicc -DDEBUG -o init_def.x def_initialization_matrix.c
+# mpicc -o init_def.x def_initialization_matrix.c
 
-mpirun -np 7 init_def.x
+mpirun -np 8 init_def.x

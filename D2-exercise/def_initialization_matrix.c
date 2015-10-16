@@ -2,20 +2,17 @@
 #include <stdlib.h>
 #include <mpi.h>
 
-#define SIZE 10
+#define SIZE 15
 
 void print_lines(double*, int, int);
+void std_out_print(double*, int, int, int, int);
 
 int main(int argc, char** argv){
 
   int MyRank, NPE, i, j, i_global, tmp_idx;
-  int block, rest, process, offset;
-  int tag = 42;
+  int block, rest, offset;
 
   double *tmp_buf;
-
-  MPI_Request request;
-  MPI_Status status;
 
   MPI_Init(&argc, &argv);
 
@@ -52,6 +49,21 @@ int main(int argc, char** argv){
 	tmp_buf[j + tmp_idx] = 0;
     }
   }
+
+  std_out_print(tmp_buf, MyRank, block, rest, NPE);
+
+  MPI_Finalize();
+
+  return 0;
+}
+
+void std_out_print(double* tmp_buf, int MyRank, int block, int rest, int NPE){
+
+  int process;
+
+  int tag = 42;
+  MPI_Request request;
+  MPI_Status status;
 
   if(MyRank == 0){
 
@@ -91,6 +103,9 @@ int main(int argc, char** argv){
 	  fwrite(tmp_buf, sizeof(double), SIZE*(block-1), fp);
 	}
       }
+      printf("\n=============================\n");
+      printf("\n\tData stored in matrix.dat\n");
+      printf("\n=============================\n");
     }
 
 #else
@@ -130,7 +145,7 @@ int main(int argc, char** argv){
 
   }
 
-  else{
+  else{ /* MyRank != 0 */
 
 #ifdef DEBUG
 
@@ -145,10 +160,6 @@ int main(int argc, char** argv){
 
 #endif /* DEBUG */
   }
- 
-  MPI_Finalize();
-
-  return 0;
 }
 
 void print_lines(double* buffer, int cols, int rows){
