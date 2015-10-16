@@ -121,6 +121,10 @@ int main(int argc, char** argv){
     printf("\n\tDone\n");
     /* print_lines(def_array, SIZE, SIZE); */
 
+    free(rec_count);
+    free(displs);
+    free(def_array);
+
 #endif /* DEBUG */
 
   }
@@ -138,6 +142,9 @@ int main(int argc, char** argv){
 
     MPI_Gatherv(tmp_buf, SIZE*block, MPI_DOUBLE, def_array, rec_count, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
+    free(rec_count);
+    free(displs);
+    free(def_array);
 #endif /* DEBUG */
   }
  
