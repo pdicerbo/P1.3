@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 
-#define SIZE 15
+#define SIZE 10
 
 void print_lines(double*, int, int);
 void std_out_print(double*, int, int, int, int);
@@ -62,7 +62,6 @@ void std_out_print(double* tmp_buf, int MyRank, int block, int rest, int NPE){
   int process;
 
   int tag = 42;
-  MPI_Request request;
   MPI_Status status;
 
   if(MyRank == 0){
@@ -77,31 +76,24 @@ void std_out_print(double* tmp_buf, int MyRank, int block, int rest, int NPE){
       print_lines(tmp_buf, SIZE, block);
       
       for(process = 1; process < NPE; process++){
-	if( (rest != 0 && process < rest) || rest == 0 ){
-	  MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	  print_lines(tmp_buf, SIZE, block);
-	}
-	else{
-	  MPI_Recv(tmp_buf, SIZE*(block - 1), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	  print_lines(tmp_buf, SIZE, block - 1);
-	}
+	if(rest != 0 && process == rest)
+	  block--;
+	MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+	print_lines(tmp_buf, SIZE, block);
       }
       printf("\n=============================\n");
     }
-    else{ 
+    else{ /* SIZE > 10 */
       /* write in binary file */
       FILE *fp;
       fp = fopen("matrix.dat", "w");
       fwrite(tmp_buf, sizeof(double), SIZE*block, fp);
+
       for(process = 1; process < NPE; process++){
-	if((rest != 0 && process < rest) || rest == 0){
-	  MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	  fwrite(tmp_buf, sizeof(double), SIZE*block, fp);
-	}
-	else{
-	  MPI_Recv(tmp_buf, SIZE*(block - 1), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-	  fwrite(tmp_buf, sizeof(double), SIZE*(block-1), fp);
-	}
+	if(rest != 0 && process == rest)
+	  block--;
+	MPI_Recv(tmp_buf, SIZE*block, MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+	fwrite(tmp_buf, sizeof(double), SIZE*block, fp);
       }
       printf("\n=============================\n");
       printf("\n\tData stored in matrix.dat\n");
@@ -120,15 +112,13 @@ void std_out_print(double* tmp_buf, int MyRank, int block, int rest, int NPE){
     displs[0] = 0;
 
     for(process = 1; process < NPE; process++){
-      if((rest != 0 && process < rest) || rest == 0){
-	rec_count[process] = SIZE * block;
-	displs[process] = rec_count[process - 1] + displs[process - 1];
-      }
-      else{
-	rec_count[process] = SIZE * (block - 1);
-	displs[process] = rec_count[process - 1] + displs[process - 1];
-      }
+      if(rest != 0 && process == rest)
+	block--;
+      rec_count[process] = SIZE * block;
+      displs[process] = rec_count[process - 1] + displs[process - 1];
     }
+
+    block++;
 
     MPI_Gatherv(tmp_buf, SIZE*block, MPI_DOUBLE, def_array, rec_count, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
@@ -145,7 +135,7 @@ void std_out_print(double* tmp_buf, int MyRank, int block, int rest, int NPE){
 
   }
 
-  else{ /* MyRank != 0 */
+  else{ /* MyRank > 0 */
 
 #ifdef DEBUG
 
