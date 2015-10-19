@@ -13,7 +13,7 @@ int main(int argc, char** argv){
   int block, left, right;
 
   int n_iter = 0;
-  int i_in, j_in, k_in, offset; /* inner index */
+  int i_in, j_in, k_in, offset, A_offset; /* inner index */
 
   double *A, *B, *C;
 
@@ -71,12 +71,11 @@ int main(int argc, char** argv){
     for(i_in = 0; i_in < block; i_in++){
 
       tmp_idx = i_in * SIZE;
+      A_offset = MyID * block;
 
       for(j_in = offset; j_in < offset + block; j_in++){
-
-	for(k_in = 0; k_in < block; k_in++){
-	  C[j_in + tmp_idx] += A[k_in + tmp_idx] * B[j_in + k_in*SIZE]; 
-	}
+	for(k_in = 0; k_in < block; k_in++)
+	  C[j_in + tmp_idx] += A[k_in + tmp_idx + A_offset] * B[j_in + k_in*SIZE];
       }
     }
   }
