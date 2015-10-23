@@ -62,18 +62,18 @@ MYFLOAT integral(int nx, int ny, MYFLOAT* val, MYFLOAT lx, MYFLOAT ly){
  */
 void init(MYFLOAT *temp, int MyID, int nx, int ny, int ny_global, int offset, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
   int ix, iy, iy_global;
-    MYFLOAT x, y;
+  MYFLOAT x, y;
 
-    for(iy=1;iy<=ny;++iy){
-      iy_global = iy + offset + ny * MyID;
-      for(ix=1;ix<=nx;++ix){
-	x=ix2x(ix, nx, lx);
-	y=iy2y(iy_global, ny_global, ly);
-	temp[((nx+2)*iy)+ix] = 1.0/(2.*PI*sigmax*sigmay)*exp(-(x-x0)*(x-x0)/(2.0*(sigmax*sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay*sigmay)) );
-      }
+  for(iy=1;iy<=ny;++iy){
+    iy_global = iy + offset + ny * MyID;
+    for(ix=1;ix<=nx;++ix){
+      x=ix2x(ix, nx, lx);
+      y=iy2y(iy_global, ny_global, ly);
+      temp[((nx+2)*iy)+ix] = 1.0/(2.*PI*sigmax*sigmay)*exp(-(x-x0)*(x-x0)/(2.0*(sigmax*sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay*sigmay)) );
     }
-    if(MyID == 0)
-      printf("--  Max (for gnuplot) -- %f\n", 1.0/(2.*PI*sigmax*sigmay) );
+  }
+  if(MyID == 0)
+    printf("--  Max (for gnuplot) -- %f\n", 1.0/(2.*PI*sigmax*sigmay) );
 }
 
 /*
@@ -87,27 +87,37 @@ void save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, int ny_global, MYFLOA
   int tag = 42;
 
   if(MyID == 0){
+    int iy_global, offset = 0;
     MYFLOAT *tmp_buf;
+    
+
     tmp_buf = (MYFLOAT*)malloc((nx + 2) * (ny + 2) * sizeof(MYFLOAT));
 
     // the double newline will be interpreted by gnuplot as a new data block
     fprintf(fp, "\n\n");
     for(iy = 1; iy <= ny; ++iy){
+      iy_global = iy + ny * MyID;
       for(ix = 1; ix <= nx; ++ix)
-	fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
+	fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy_global,ny_global,ly), temp[((nx+2)*iy)+ix]);
     }
+
+    /* recive data from other processes */
     for(process = 1; process < NPE; process++){
-      if(rest != 0 && process == rest)
+      if(rest != 0 && process == rest){
 	ny--;
+	offset = rest;
+      }
       MPI_Recv(tmp_buf, (nx + 2) * (ny + 2), MY_MPI_FLOAT, process, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      for(iy = 1; iy <= ny; ++iy){ 
+      for(iy = 1; iy <= ny; ++iy){
+	iy_global = iy + offset + ny * process;
 	for(ix = 1; ix <= nx; ++ix)
-	  fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), tmp_buf[((nx+2)*iy)+ix]);
+	  fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy_global,ny_global,ly), tmp_buf[((nx+2)*iy)+ix]);
       }
     }
     if(rest != 0)
       ny++;
 
+    free(tmp_buf);
   }
   else{
     MPI_Send(temp, (nx + 2) * (ny + 2), MY_MPI_FLOAT, 0, tag, MPI_COMM_WORLD);
@@ -295,7 +305,7 @@ int main(int argc, char* argv[]){
     int i, nx, ny, n_steps, nRows, nCols;
     MYFLOAT lx, ly, alpha, dt, x0, y0, sigmax, sigmay;
     MYFLOAT *temp, *temp_new;
-    MYFLOAT norm, norm_ini, bound;
+    MYFLOAT norm, norm_ini, bound, norm_ini_root, norm_root;
     FILE *fp;
 
     int MyID, NPE, ny_global, rest, offset = 0;
@@ -351,7 +361,8 @@ int main(int argc, char* argv[]){
     // checking stability of the method 
     bound = 1.0/(2.0*alpha)*(1.0/(nx*nx/(lx*lx)+ny*ny/(ly*ly))); 
     if(dt > bound)
-       printf("Warning, unstable regime, reduce dt \n");
+      if(MyID == 0)
+	printf("Warning, unstable regime, reduce dt \n");
 
     // HINT - the exercise requires to work on distributed data
     temp = (MYFLOAT *) malloc (nRows*nCols*sizeof(MYFLOAT));
@@ -369,12 +380,15 @@ int main(int argc, char* argv[]){
 
     // calculating initial norm (~ total energy)
     // HINT - perform a parallel integration
+
     norm_ini=integral(nx, ny, temp, lx, ly);
-    printf(" Initial integral value: %f\n", norm_ini);
+    MPI_Reduce(&norm_ini, &norm_ini_root, 1, MY_MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    fp = fopen("heat_diffusion.dat", "w");
-
-    printf(" Starting time evolution... \n\n ");
+    if(MyID == 0){
+      printf(" Initial integral value: %f\n", norm_ini_root);
+      fp = fopen("heat_diffusion.dat", "w");
+      printf(" Starting time evolution... \n\n ");
+    }
 
     if( (nx * ny ) < 10001 )
       save_gnuplot(fp, temp, nx, ny, ny_global, lx, ly, MyID, NPE, rest);
@@ -391,10 +405,15 @@ int main(int argc, char* argv[]){
     }
 
     // checking final norm (~total energy)
-    norm=integral(nx, ny, temp, lx, ly); 
-    printf(" Integral end: %f\n",norm);
+    norm=integral(nx, ny, temp, lx, ly);
+    MPI_Reduce(&norm, &norm_root, 1, MY_MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    fclose(fp); 
+    if(MyID == 0){
+      printf(" Integral end: %f\n",norm_root);
+      fclose(fp);
+    }
+
+    MPI_Finalize();
 
     return 0;
 }
