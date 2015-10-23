@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <unistd.h>
+
 #define PI 3.14159265359
 
 typedef double MYFLOAT;
@@ -118,7 +122,14 @@ void evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, M
 
 }
 
-
+double seconds(){
+  /* Return the second elapsed since Epoch (00:00:00 UTC, January 1, 1970) */
+  struct timeval tmp;
+  double sec;
+  gettimeofday( &tmp, (struct timezone *)0 );
+  sec = tmp.tv_sec + ((double)tmp.tv_usec)/1000000.0;
+  return sec;
+}
 
 int main(int argc, char* argv[]){
 
@@ -129,6 +140,8 @@ int main(int argc, char* argv[]){
     MYFLOAT norm, norm_ini, bound;
     FILE *fp;
 
+    double t_start, t_end, t_sum = 0.;
+
     if (argc !=3) 
        {
        printf(" FTCS finite difference solution of the heat equation \n\n");
@@ -137,10 +150,10 @@ int main(int argc, char* argv[]){
        }
 
     // number of points in the x directions
-    nx=100;
+    nx=4000;
     nCols= nx + 2;
     // number of points in the y directions
-    ny=100;
+    ny=4000;
     nRows= ny + 2;
     // size of the system in the x direction
     lx=2.0;
@@ -180,19 +193,25 @@ int main(int argc, char* argv[]){
 
     frame=n_steps/100;
     printf(" Starting time evolution... \n\n ");
+    t_start = seconds();
     for(i=1; i<=n_steps; ++i) {
          // saving a snapshot every 100 time steps
-	 if ( (i-1)%frame==0)
-         	save_gnuplot(fp, temp, nx, ny, lx, ly);
+      if ( (i-1)%frame==0){
+	t_end = seconds();
+	save_gnuplot(fp, temp, nx, ny, lx, ly);
+	t_sum += t_end - t_start;
+      }
          // performing TFSC-FD step and updating boundaries
          evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
          update_boundaries_FLAT(nx, ny, temp);
     }
+    t_end = seconds();
+    t_sum += t_end - t_start;
 
     // checking final norm (~total energy)
     norm=integral(nx, ny, temp, lx, ly); 
     printf(" Integral end: %f\n",norm);
-
+    printf(" Time used: %lg s", t_sum);
     fclose(fp); 
 
     return 0;
