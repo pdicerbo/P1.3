@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <mpi.h>
 
 #define PI 3.14159265359
 
@@ -59,18 +60,20 @@ MYFLOAT integral(int nx, int ny, MYFLOAT* val, MYFLOAT lx, MYFLOAT ly){
  * initialize the system with a gaussian temperature distribution. 
  * The center of the gaussian (x0,y0) as well as the amplitudes sigmax, sigmay are input parameters 
  */
-int init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
-    int ix,iy;
-    MYFLOAT x,y;
+void init(MYFLOAT *temp, int MyID, int nx, int ny, int ny_global, int offset, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
+  int ix, iy, iy_global;
+    MYFLOAT x, y;
 
-    for(iy=1;iy<=ny;++iy)
-	for(ix=1;ix<=nx;++ix){
-	    x=ix2x(ix, nx, lx);
-	    y=iy2y(iy, ny, ly);
-	    temp[((nx+2)*iy)+ix] = 1.0/(2.*PI*sigmax*sigmay)*exp(-(x-x0)*(x-x0)/(2.0*(sigmax*sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay*sigmay)) );
-	}
-    printf("--  Max (for gnuplot) -- %f\n", 1.0/(2.*PI*sigmax*sigmay) );
-    return 0;
+    for(iy=1;iy<=ny;++iy){
+      iy_global = iy + offset + ny * MyID;
+      for(ix=1;ix<=nx;++ix){
+	x=ix2x(ix, nx, lx);
+	y=iy2y(iy_global, ny_global, ly);
+	temp[((nx+2)*iy)+ix] = 1.0/(2.*PI*sigmax*sigmay)*exp(-(x-x0)*(x-x0)/(2.0*(sigmax*sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay*sigmay)) );
+      }
+    }
+    if(MyID == 0)
+      printf("--  Max (for gnuplot) -- %f\n", 1.0/(2.*PI*sigmax*sigmay) );
 }
 
 /*
@@ -78,18 +81,18 @@ int init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFL
  * the ascii format is suitable for splot gnuplot function
  * HINT - print distributed data from ROOT_PROCESS
  */
-int save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly) {
+/* int save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly) { */
     
-    int ix,iy;
-    // the double newline will be interpreted by gnuplot as a new data block
-    fprintf(fp, "\n\n");
-    for(iy=1;iy<=ny;++iy){		
-	for(ix=1;ix<=nx;++ix)
-	    fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
-    }
+/*     int ix,iy; */
+/*     // the double newline will be interpreted by gnuplot as a new data block */
+/*     fprintf(fp, "\n\n"); */
+/*     for(iy=1;iy<=ny;++iy){		 */
+/* 	for(ix=1;ix<=nx;++ix) */
+/* 	    fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]); */
+/*     } */
 
-    return 0;
-}
+/*     return 0; */
+/* } */
 
 /*
  * Updating boundaries. Boundaries are flat: copying the value of the neighbour
@@ -137,7 +140,43 @@ void evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, M
 
 }
 
+void print_lines(double* buffer, int cols, int rows){
+  int i, j, n_i;
+  for(i = 1; i <= rows; i++){
+    n_i = i * (cols + 2);
+    for(j = 1; j <= cols; j++)
+      printf("\t%lg", buffer[j + n_i]);
+    printf("\n");
+  }
+}
 
+
+void std_out_print(double* tmp_buf, int MyRank, int SIZE, int block, int rest, int NPE){
+
+  int process;
+
+  int tag = 42;
+  MPI_Status status;
+
+  if(MyRank == 0){
+    /* print matrix */
+    printf("\n=============================\n");
+    printf("\tPRINTING MATRIX (NPE = %d, rest = %d):\n\n", NPE, rest);
+    
+    print_lines(tmp_buf, SIZE, block);
+    
+    for(process = 1; process < NPE; process++){
+      if(rest != 0 && process == rest)
+	block--;
+      MPI_Recv(tmp_buf, (SIZE + 2) * (block + 2), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
+      print_lines(tmp_buf, SIZE, block);
+    }
+    printf("\n=============================\n");
+  }
+  else{ /* MyRank > 0 */
+    MPI_Send(tmp_buf, (SIZE + 2) * (block + 2), MPI_DOUBLE, 0, tag, MPI_COMM_WORLD);
+  }
+}
 
 int main(int argc, char* argv[]){
 
@@ -148,6 +187,8 @@ int main(int argc, char* argv[]){
     MYFLOAT norm, norm_ini, bound;
     FILE *fp;
 
+    int MyID, NPE, ny_global, rest, offset = 0;
+
     if (argc !=3) 
        {
        printf(" FTCS finite difference solution of the heat equation \n\n");
@@ -155,11 +196,30 @@ int main(int argc, char* argv[]){
        return 1;
        }
 
+    MPI_Init(&argc, &argv);
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &MyID);
+    MPI_Comm_size(MPI_COMM_WORLD, &NPE);
+
     // number of points in the x directions
-    nx=100;
+    nx = 11; //100;
     nCols= nx + 2;
     // number of points in the y directions
-    ny=50;
+    ny_global = 11; //50;
+
+    if(ny_global < NPE != 0){
+      printf("\n\tNumber of rows must be greater than NPE\n\tExit!\n");
+      return 1;
+    }
+
+    ny = ny_global / NPE;
+    rest = ny_global % NPE;
+
+    if(rest != 0 && MyID < rest)
+      ny++;
+    else
+      offset = rest;
+
     nRows= ny + 2;
     // size of the system in the x direction
     lx=2.0;
@@ -174,22 +234,26 @@ int main(int argc, char* argv[]){
     // alpha coefficient (diffusivity) of the heat equation 
     alpha=1.0;
     // number of time steps and amplitude thereof. Command line argumentes 
-    n_steps=atoi(argv[1]);
-    dt=atof(argv[2]);
+    n_steps = atoi(argv[1]);
+    dt = atof(argv[2]);
 
     // checking stability of the method 
     bound = 1.0/(2.0*alpha)*(1.0/(nx*nx/(lx*lx)+ny*ny/(ly*ly))); 
-    if (dt>bound  )
-       {
+    if(dt > bound)
        printf("Warning, unstable regime, reduce dt \n");
-       }
 
     // HINT - the exercise requires to work on distributed data
     temp = (MYFLOAT *) malloc (nRows*nCols*sizeof(MYFLOAT));
     temp_new = (MYFLOAT *) malloc (nRows*nCols*sizeof(MYFLOAT));
 
     // fill temperaature array with initial condition, imposing flat boundary conditions
-    init(temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+    init(temp, MyID, nx, ny, ny_global, offset, lx, ly, x0, y0, sigmax, sigmay);
+
+    /* initialization check */
+    std_out_print(temp, MyID, nx, ny, rest, NPE);
+    MPI_Finalize();
+    return 0;
+
     update_boundaries_FLAT(nx, ny,temp);
 
     // calculating initial norm (~ total energy)
@@ -201,8 +265,8 @@ int main(int argc, char* argv[]){
 
     printf(" Starting time evolution... \n\n ");
 
-    if( (nx * ny ) < 10001 )
-      save_gnuplot(fp, temp, nx, ny, nly, lx, ly, rank, nproc);
+    /* if( (nx * ny ) < 10001 ) */
+    /*   save_gnuplot(fp, temp, nx, ny, nly, lx, ly, rank, nproc); */
 
     for(i=1; i<=n_steps; ++i) {
 
@@ -211,8 +275,8 @@ int main(int argc, char* argv[]){
          update_boundaries_FLAT(nx, ny, temp);
 
          // saving a snapshot every DUMP time steps
-	 if( i % DUMP == 0 && (nx * ny ) < 10001 )
-	   save_gnuplot(fp, temp, nx, ny, nly, lx, ly, rank, nproc); 
+	 /* if( i % DUMP == 0 && (nx * ny ) < 10001 ) */
+	 /*   save_gnuplot(fp, temp, nx, ny, nly, lx, ly, rank, nproc);  */
 
     }
 
