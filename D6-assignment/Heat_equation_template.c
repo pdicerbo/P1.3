@@ -81,37 +81,148 @@ void init(MYFLOAT *temp, int MyID, int nx, int ny, int ny_global, int offset, MY
  * the ascii format is suitable for splot gnuplot function
  * HINT - print distributed data from ROOT_PROCESS
  */
-/* int save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly) { */
+void save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, int ny_global, MYFLOAT lx, MYFLOAT ly, int MyID, int NPE, int rest) {
     
-/*     int ix,iy; */
-/*     // the double newline will be interpreted by gnuplot as a new data block */
-/*     fprintf(fp, "\n\n"); */
-/*     for(iy=1;iy<=ny;++iy){		 */
-/* 	for(ix=1;ix<=nx;++ix) */
-/* 	    fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]); */
-/*     } */
+  int ix, iy, process;
+  int tag = 42;
 
-/*     return 0; */
-/* } */
+  if(MyID == 0){
+    MYFLOAT *tmp_buf;
+    tmp_buf = (MYFLOAT*)malloc((nx + 2) * (ny + 2) * sizeof(MYFLOAT));
+
+    // the double newline will be interpreted by gnuplot as a new data block
+    fprintf(fp, "\n\n");
+    for(iy = 1; iy <= ny; ++iy){
+      for(ix = 1; ix <= nx; ++ix)
+	fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
+    }
+    for(process = 1; process < NPE; process++){
+      if(rest != 0 && process == rest)
+	ny--;
+      MPI_Recv(tmp_buf, (nx + 2) * (ny + 2), MY_MPI_FLOAT, process, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      for(iy = 1; iy <= ny; ++iy){ 
+	for(ix = 1; ix <= nx; ++ix)
+	  fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), tmp_buf[((nx+2)*iy)+ix]);
+      }
+    }
+    if(rest != 0)
+      ny++;
+
+  }
+  else{
+    MPI_Send(temp, (nx + 2) * (ny + 2), MY_MPI_FLOAT, 0, tag, MPI_COMM_WORLD);
+  }
+}
 
 /*
  * Updating boundaries. Boundaries are flat: copying the value of the neighbour
  * HINT -  handle the ghost-cell exchange 
  */
 
-void update_boundaries_FLAT(int nx, int ny, MYFLOAT *temp){
+void update_boundaries_FLAT(int MyID, int NPE, int nx, int ny, MYFLOAT *temp){
 
-    int ix, iy;
+  int ix, iy, prev, next;
+  MYFLOAT *buf_send_up, *buf_send_down, *buf_rec_up, *buf_rec_down;
 
-    for(iy=0;iy<=ny+1;++iy){
-	temp[(nx+2)*iy] = temp[((nx+2)*iy)+1];
-	temp[((nx+2)*iy)+(nx+1)] = temp[((nx+2)*iy)+nx];
+  int send_up_tag = 42;
+  int send_down_tag = 24;
+
+  MPI_Request send_up, send_down, rec_up;
+  MPI_Status status, rec_down;
+
+  prev = (MyID + NPE - 1) % NPE;
+  next = (MyID + 1) % NPE;
+
+  for(iy = 1; iy <= ny; iy++){
+    temp[(nx + 2)*iy] = temp[(nx + 2)*iy + 1];
+    temp[(nx + 1) + (nx + 2)*iy] = temp[nx + (nx + 2)*iy];
+  }
+
+  if(MyID > 0 && MyID < NPE - 1){
+
+    buf_send_up   = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+    buf_send_down = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+    buf_rec_up    = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+    buf_rec_down  = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+      
+    for(ix = 0; ix < nx + 2; ix++){
+      buf_send_up[ix] = temp[nx + 2 + ix];
+      buf_send_down[ix] = temp[(nx + 2) * ny + ix];
     }
 
-    for(ix=0;ix<=nx+1;++ix){
-	temp[ix] = temp[(nx+2)+ix];
-	temp[((nx+2)*(ny+1))+ix] = temp[((nx+2)*ny)+ix];
-    }
+    MPI_Isend(buf_send_up, (nx+2), MY_MPI_FLOAT, prev, send_up_tag, MPI_COMM_WORLD, &send_up);
+    MPI_Isend(buf_send_down, (nx+2), MY_MPI_FLOAT, next, send_down_tag, MPI_COMM_WORLD, &send_down);
+    
+    MPI_Irecv(buf_rec_up, (nx+2), MY_MPI_FLOAT, prev, send_down_tag, MPI_COMM_WORLD, &rec_up);
+    MPI_Recv(buf_rec_down, (nx+2), MY_MPI_FLOAT, next, send_up_tag, MPI_COMM_WORLD, &rec_down);
+
+    for(ix = 0; ix < nx + 2; ix++)
+      temp[(nx + 2) * (ny + 1) + ix] = buf_rec_down[ix];
+
+    MPI_Wait(&rec_up, &status);
+    
+    for(ix = 0; ix < nx + 2; ix++)
+      temp[ix] = buf_rec_up[ix];
+
+    MPI_Wait(&send_up, &status);
+    MPI_Wait(&send_down, &status);
+
+    free(buf_send_up);
+    free(buf_send_down);
+    free(buf_rec_up);
+    free(buf_rec_down);
+  }
+  else if(MyID == 0){
+
+    buf_send_down = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+    buf_rec_down  = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+      
+    for(ix = 0; ix < nx + 2; ix++)
+      buf_send_down[ix] = temp[(nx + 2) * ny + ix];
+
+    MPI_Isend(buf_send_down, (nx+2), MY_MPI_FLOAT, next, send_down_tag, MPI_COMM_WORLD, &send_down);
+
+    MPI_Irecv(buf_rec_down, (nx+2), MY_MPI_FLOAT, next, send_up_tag, MPI_COMM_WORLD, &rec_up);
+
+    /* update first row of matrix */
+    for(iy = 0; iy < nx + 2; iy++)
+      temp[iy] = temp[(nx + 2) + iy];
+
+    MPI_Wait(&rec_up, &status);
+
+    for(ix = 0; ix < nx + 2; ix++)
+      temp[(nx + 2) * (ny + 1) + ix] = buf_rec_down[ix];
+
+    MPI_Wait(&send_down, &status);
+
+    free(buf_send_down);
+    free(buf_rec_down);
+  }
+  else{
+    buf_send_up = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+    buf_rec_up  = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
+    
+    for(ix = 0; ix < nx + 2; ix++)
+      buf_send_up[ix] = temp[nx + 2 + ix];
+
+    MPI_Isend(buf_send_up, (nx+2), MY_MPI_FLOAT, prev, send_up_tag, MPI_COMM_WORLD, &send_up);
+    
+    MPI_Irecv(buf_rec_up, (nx+2), MY_MPI_FLOAT, prev, send_down_tag, MPI_COMM_WORLD, &rec_up);
+    
+    /* update last row of matrix */
+    for(ix = 0; ix < nx + 2; ix++)
+      temp[(nx + 2) * (ny + 1) + ix] = temp[(nx + 2) * ny + ix];
+
+    MPI_Wait(&rec_up, &status);
+    
+    for(ix = 0; ix < nx + 2; ix++)
+      temp[ix] = buf_rec_up[ix];
+
+    MPI_Wait(&send_up, &status);
+
+    free(buf_send_up);
+    free(buf_rec_up);
+  }
 }
 
 /*
@@ -202,10 +313,10 @@ int main(int argc, char* argv[]){
     MPI_Comm_size(MPI_COMM_WORLD, &NPE);
 
     // number of points in the x directions
-    nx = 11; //100;
+    nx = 100;
     nCols= nx + 2;
     // number of points in the y directions
-    ny_global = 11; //50;
+    ny_global = 50;
 
     if(ny_global < NPE != 0){
       printf("\n\tNumber of rows must be greater than NPE\n\tExit!\n");
@@ -250,11 +361,11 @@ int main(int argc, char* argv[]){
     init(temp, MyID, nx, ny, ny_global, offset, lx, ly, x0, y0, sigmax, sigmay);
 
     /* initialization check */
-    std_out_print(temp, MyID, nx, ny, rest, NPE);
-    MPI_Finalize();
-    return 0;
+    /* std_out_print(temp, MyID, nx, ny, rest, NPE); */
+    /* MPI_Finalize(); */
+    /* return 0; */
 
-    update_boundaries_FLAT(nx, ny,temp);
+    update_boundaries_FLAT(MyID, NPE, nx, ny,temp);
 
     // calculating initial norm (~ total energy)
     // HINT - perform a parallel integration
@@ -265,19 +376,18 @@ int main(int argc, char* argv[]){
 
     printf(" Starting time evolution... \n\n ");
 
-    /* if( (nx * ny ) < 10001 ) */
-    /*   save_gnuplot(fp, temp, nx, ny, nly, lx, ly, rank, nproc); */
+    if( (nx * ny ) < 10001 )
+      save_gnuplot(fp, temp, nx, ny, ny_global, lx, ly, MyID, NPE, rest);
 
     for(i=1; i<=n_steps; ++i) {
 
          // performing TFSC-FD step and updating boundaries
          evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
-         update_boundaries_FLAT(nx, ny, temp);
+         update_boundaries_FLAT(MyID, NPE, nx, ny, temp);
 
-         // saving a snapshot every DUMP time steps
-	 /* if( i % DUMP == 0 && (nx * ny ) < 10001 ) */
-	 /*   save_gnuplot(fp, temp, nx, ny, nly, lx, ly, rank, nproc);  */
-
+         //saving a snapshot every DUMP time steps
+	 if( i % DUMP == 0 && (nx * ny) < 10001)
+	   save_gnuplot(fp, temp, nx, ny, ny_global, lx, ly, MyID, NPE, rest);
     }
 
     // checking final norm (~total energy)
