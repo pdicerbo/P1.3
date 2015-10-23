@@ -370,21 +370,18 @@ int main(int argc, char* argv[]){
 
     // fill temperaature array with initial condition, imposing flat boundary conditions
     init(temp, MyID, nx, ny, ny_global, offset, lx, ly, x0, y0, sigmax, sigmay);
-
-    /* initialization check */
-    /* std_out_print(temp, MyID, nx, ny, rest, NPE); */
-    /* MPI_Finalize(); */
-    /* return 0; */
-
     update_boundaries_FLAT(MyID, NPE, nx, ny,temp);
 
     // calculating initial norm (~ total energy)
     // HINT - perform a parallel integration
 
     norm_ini=integral(nx, ny, temp, lx, ly);
+    norm_ini_root = 0.;
+    norm_root = 0.;
     MPI_Reduce(&norm_ini, &norm_ini_root, 1, MY_MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if(MyID == 0){
+      norm_ini_root /= NPE;
       printf(" Initial integral value: %f\n", norm_ini_root);
       fp = fopen("heat_diffusion.dat", "w");
       printf(" Starting time evolution... \n\n ");
@@ -409,6 +406,7 @@ int main(int argc, char* argv[]){
     MPI_Reduce(&norm, &norm_root, 1, MY_MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if(MyID == 0){
+      norm_root /= NPE;
       printf(" Integral end: %f\n",norm_root);
       fclose(fp);
     }
