@@ -12,6 +12,10 @@
 #include <math.h>
 #include <mpi.h>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <unistd.h>
+
 #define PI 3.14159265359
 
 #ifdef __SINGLE
@@ -45,14 +49,14 @@ MYFLOAT iy2y(int iy, int ny, MYFLOAT ly){
 /* Integral of the temperature field 
  *  HINT - In the parallel case, the integration on each process will yeld a the integral on the local region
  */
-MYFLOAT integral(int nx, int ny, MYFLOAT* val, MYFLOAT lx, MYFLOAT ly){
+MYFLOAT integral(int nx, int ny, int ny_global, MYFLOAT* val, MYFLOAT lx, MYFLOAT ly){
 	MYFLOAT sum=0.0;
 	int ix,iy;
     	for(iy=1;iy<=ny;++iy)
 		for(ix=1;ix<=nx;++ix){
           		sum+=val[((nx+2)*iy)+ix];
  		} 
- 	return(sum*lx/nx*ly/ny);
+ 	return(sum*lx/nx*ly/ny_global);
 }
 
 
@@ -239,13 +243,13 @@ void update_boundaries_FLAT(int MyID, int NPE, int nx, int ny, MYFLOAT *temp){
  * Perform time evolution using FTCS FD method
  */
 
-void evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, MYFLOAT *temp_new, MYFLOAT alpha){
+void evolve(int nx, int ny, int ny_global, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, MYFLOAT *temp_new, MYFLOAT alpha){
     
     MYFLOAT dx, dy;
     int ix, iy;
 
     dx = lx/nx;
-    dy = ly/ny;
+    dy = ly/ny_global;
 
     for(iy=1;iy<=ny;++iy)
 	for(ix=1;ix<=nx;++ix){
@@ -254,11 +258,9 @@ void evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, M
                 (temp[((nx+2)*iy)+(ix+1)] + temp[((nx+2)*iy)+(ix-1)] -2.0* temp[((nx+2)*iy)+ix])/(dx*dx) );
 	}
 
-
     for(iy=0;iy<=ny+1;++iy)
-	for(ix=0;ix<=nx+1;++ix)
-	    temp[((nx+2)*iy)+ix] = temp_new[((nx+2)*iy)+ix];
-
+    	for(ix=0;ix<=nx+1;++ix)
+    	    temp[((nx+2)*iy)+ix] = temp_new[((nx+2)*iy)+ix];
 }
 
 void print_lines(double* buffer, int cols, int rows){
@@ -299,6 +301,15 @@ void std_out_print(double* tmp_buf, int MyRank, int SIZE, int block, int rest, i
   }
 }
 
+double seconds(){
+  /* Return the second elapsed since Epoch (00:00:00 UTC, January 1, 1970) */
+  struct timeval tmp;
+  double sec;
+  gettimeofday( &tmp, (struct timezone *)0 );
+  sec = tmp.tv_sec + ((double)tmp.tv_usec)/1000000.0;
+  return sec;
+}
+
 int main(int argc, char* argv[]){
 
 
@@ -307,6 +318,8 @@ int main(int argc, char* argv[]){
     MYFLOAT *temp, *temp_new;
     MYFLOAT norm, norm_ini, bound, norm_ini_root, norm_root;
     FILE *fp;
+    
+    double t_start, t_end, t_sum = 0;
 
     int MyID, NPE, ny_global, rest, offset = 0;
 
@@ -372,47 +385,52 @@ int main(int argc, char* argv[]){
     init(temp, MyID, nx, ny, ny_global, offset, lx, ly, x0, y0, sigmax, sigmay);
     update_boundaries_FLAT(MyID, NPE, nx, ny,temp);
 
-    // calculating initial norm (~ total energy)
-    // HINT - perform a parallel integration
-
-    norm_ini=integral(nx, ny, temp, lx, ly);
+    norm_ini=integral(nx, ny, ny_global, temp, lx, ly);
     norm_ini_root = 0.;
     norm_root = 0.;
     MPI_Reduce(&norm_ini, &norm_ini_root, 1, MY_MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if(MyID == 0){
-      norm_ini_root /= NPE;
-      printf(" Initial integral value: %f\n", norm_ini_root);
+      printf("\tInitial integral value: %f\n", norm_ini_root);
       fp = fopen("heat_diffusion.dat", "w");
-      printf(" Starting time evolution... \n\n ");
+      printf("\tStarting time evolution... \n\n ");
     }
 
     if( (nx * ny ) < 10001 )
       save_gnuplot(fp, temp, nx, ny, ny_global, lx, ly, MyID, NPE, rest);
+   
 
+    t_start = seconds();
+    
     for(i=1; i<=n_steps; ++i) {
-
-         // performing TFSC-FD step and updating boundaries
-         evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
-         update_boundaries_FLAT(MyID, NPE, nx, ny, temp);
-
-         //saving a snapshot every DUMP time steps
-	 if( i % DUMP == 0 && (nx * ny) < 10001)
-	   save_gnuplot(fp, temp, nx, ny, ny_global, lx, ly, MyID, NPE, rest);
+      // performing TFSC-FD step and updating boundaries
+      evolve(nx, ny, ny_global, lx, ly, dt, temp, temp_new, alpha);
+      update_boundaries_FLAT(MyID, NPE, nx, ny, temp);
+      
+      //saving a snapshot every DUMP time steps
+      if( i % DUMP == 0 && (nx * ny) < 10001){
+	t_end = seconds();
+	save_gnuplot(fp, temp, nx, ny, ny_global, lx, ly, MyID, NPE, rest);
+	t_sum += t_end - t_start;
+	t_start = seconds();
+      }
     }
+    
+    t_end = seconds();
+    t_sum += t_end- t_start;
 
     // checking final norm (~total energy)
-    norm=integral(nx, ny, temp, lx, ly);
+    norm=integral(nx, ny, ny_global, temp, lx, ly);
     MPI_Reduce(&norm, &norm_root, 1, MY_MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if(MyID == 0){
-      norm_root /= NPE;
-      printf(" Integral end: %f\n",norm_root);
+      printf("\tIntegral end: %f\n",norm_root);
+      printf("\tTime used: %lg s\n", t_sum);
       fclose(fp);
     }
-
+    
     MPI_Finalize();
-
+    
     return 0;
 }
 
