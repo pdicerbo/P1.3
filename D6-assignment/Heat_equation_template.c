@@ -32,10 +32,8 @@ typedef double MYFLOAT;
 
 #define DUMP 100
 
-
-/* 
+/*
  * conversions from discrete to real coordinates
- * HINT -  Consider the shift from local coordinates to global coodinates
  */
 MYFLOAT ix2x(int ix, int nx, MYFLOAT lx){
     return ((ix-1) - nx / 2.0)*lx/nx;
@@ -45,9 +43,8 @@ MYFLOAT iy2y(int iy, int ny, MYFLOAT ly){
     return ((iy-1) - ny / 2.0)*ly/ny;
 }
 
-
-/* Integral of the temperature field 
- *  HINT - In the parallel case, the integration on each process will yeld a the integral on the local region
+/* 
+ * Integral of the temperature field 
  */
 MYFLOAT integral(int nx, int ny, int ny_global, MYFLOAT* val, MYFLOAT lx, MYFLOAT ly){
 	MYFLOAT sum=0.0;
@@ -83,7 +80,6 @@ void init(MYFLOAT *temp, int MyID, int nx, int ny, int ny_global, int offset, MY
 /*
  * save the temperature distribution
  * the ascii format is suitable for splot gnuplot function
- * HINT - print distributed data from ROOT_PROCESS
  */
 void save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, int ny_global, MYFLOAT lx, MYFLOAT ly, int MyID, int NPE, int rest) {
     
@@ -130,7 +126,6 @@ void save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, int ny_global, MYFLOA
 
 /*
  * Updating boundaries. Boundaries are flat: copying the value of the neighbour
- * HINT -  handle the ghost-cell exchange 
  */
 
 void update_boundaries_FLAT(int MyID, int NPE, int nx, int ny, MYFLOAT *temp){
@@ -261,44 +256,6 @@ void evolve(int nx, int ny, int ny_global, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, M
     for(iy=0;iy<=ny+1;++iy)
     	for(ix=0;ix<=nx+1;++ix)
     	    temp[((nx+2)*iy)+ix] = temp_new[((nx+2)*iy)+ix];
-}
-
-void print_lines(double* buffer, int cols, int rows){
-  int i, j, n_i;
-  for(i = 1; i <= rows; i++){
-    n_i = i * (cols + 2);
-    for(j = 1; j <= cols; j++)
-      printf("\t%lg", buffer[j + n_i]);
-    printf("\n");
-  }
-}
-
-
-void std_out_print(double* tmp_buf, int MyRank, int SIZE, int block, int rest, int NPE){
-
-  int process;
-
-  int tag = 42;
-  MPI_Status status;
-
-  if(MyRank == 0){
-    /* print matrix */
-    printf("\n=============================\n");
-    printf("\tPRINTING MATRIX (NPE = %d, rest = %d):\n\n", NPE, rest);
-    
-    print_lines(tmp_buf, SIZE, block);
-    
-    for(process = 1; process < NPE; process++){
-      if(rest != 0 && process == rest)
-	block--;
-      MPI_Recv(tmp_buf, (SIZE + 2) * (block + 2), MPI_DOUBLE, process, tag, MPI_COMM_WORLD, &status);
-      print_lines(tmp_buf, SIZE, block);
-    }
-    printf("\n=============================\n");
-  }
-  else{ /* MyRank > 0 */
-    MPI_Send(tmp_buf, (SIZE + 2) * (block + 2), MPI_DOUBLE, 0, tag, MPI_COMM_WORLD);
-  }
 }
 
 double seconds(){
