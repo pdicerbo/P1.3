@@ -44,7 +44,7 @@ The serial code implements the above algorithm for a 2D square domain of nx*ny p
 
 The initial condition is set to be a gaussian distribution, centered in (x0,y0) with amplitudes (sigmax, sigmay)
  
-Notice that the system actually allocates an array of size (nx+2)*(ny+2), and that the grid point with coordinates (i=0,j=0) is mapped to 
+Notice that the system actually allocates an array of size (nx+2)*(ny+2), and that the grid point with coordinates (i=1,j=1) is mapped to 
 the array element 
 ::
 
