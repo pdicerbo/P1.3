@@ -5,8 +5,6 @@
 #PBS -l nodes=1:ppn=20
 #PBS -q reserved4
 
-#module load openmpi/1.8.3/gnu/4.9.2
-
 cd $PBS_O_WORKDIR
 gcc -fopenmp hello_world.c -o hello_world.x
 
@@ -14,7 +12,7 @@ for NP in 1 2 4 8 16
 do
 
 echo $NP
-# OMP_NUM_THREADS=$NP
-./hello_world.x $NP
+export OMP_NUM_THREADS=$NP
+./hello_world.x
 
 done

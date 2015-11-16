@@ -3,12 +3,7 @@
 #include <omp.h>
 
 int main(int argc, char** argv){
-  if(argc > 1)
-    int nt = atoi(argv[1]);
-  else
-    nt = 0;
 
-  omp_set_num_threads(nt);
   printf("\n\n\tSequential part...\n");
 #pragma omp parallel
 {
