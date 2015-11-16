@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#PBS -N mm_mult
-#PBS -l walltime=00:02:00
+#PBS -N big_mm_mult
+#PBS -l walltime=01:00:00
 #PBS -l nodes=1:ppn=20
 #PBS -q reserved3
 
@@ -9,8 +9,8 @@ module load openmpi/1.8.3/gnu/4.9.2
 
 cd $PBS_O_WORKDIR
 
-rm *.x
+# rm *.x
 
-mpicc -DDEBUG -o multiply.x multiply.c
+mpicc -DDEBUG -o big_m.x big_m.c 
 
-mpirun -np 2 multiply.x
+mpirun -np 20 big_m.x
