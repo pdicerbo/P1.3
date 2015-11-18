@@ -12,7 +12,7 @@ omp: CFLAGS += -fopenmp -DLINK_OMP
 omp: all
 
 Heat_equation_parallel.x : Heat_equation_parallel.c
-	mpicc $^ -o $@
+	mpicc $^ $(LIBS) $(CFLAGS) -o $@
 
 %.x : %.o
 	$(CC) $^ $(LIBS) -o $@

@@ -20,4 +20,6 @@ module load openmpi/1.8.3/gnu/4.9.2
 # done
 
 export OMP_NUM_THREADS=2
-mpirun --map-by ppr:5:socket:pe=2 Heat_equation_parallel.x 1000 0.00001
+mpirun --map-by ppr:5:socket:pe=2 Heat_equation_parallel.x 200 0.00000001
+
+# mpirun -np 120 Heat_equation_parallel.x 200 0.00000001

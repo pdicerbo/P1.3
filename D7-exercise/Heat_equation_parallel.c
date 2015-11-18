@@ -34,7 +34,7 @@ typedef double MYFLOAT;
 
 #endif
 
-#define DUMP 100
+#define DUMP 1000
 
 /*
  * conversions from discrete to real coordinates
@@ -136,8 +136,8 @@ void save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, int ny_global, MYFLOA
 
 void update_boundaries_FLAT(int MyID, int NPE, int nx, int ny, MYFLOAT *temp){
 
-  int ix, iy, prev, next;
-  MYFLOAT *buf_send_up, *buf_send_down, *buf_rec_up, *buf_rec_down;
+  /* int ix, iy,  */
+  int prev, next;
 
   int send_up_tag = 42;
   int send_down_tag = 24;
@@ -227,12 +227,12 @@ int main(int argc, char* argv[]){
     MPI_Comm_size(MPI_COMM_WORLD, &NPE);
 
     // number of points in the x directions
-    nx = 100;
+    nx = 2048*4;
     nCols= nx + 2;
     // number of points in the y directions
-    ny_global = 50;
+    ny_global = 2048*4;
 
-    if(ny_global < NPE != 0){
+    if(ny_global < NPE){
       printf("\n\tNumber of rows must be greater than NPE\n\tExit!\n");
       return 1;
     }
