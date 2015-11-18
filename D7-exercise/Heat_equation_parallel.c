@@ -16,6 +16,10 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
+#ifdef LINK_OMP
+#include <omp.h>
+#endif
+
 #define PI 3.14159265359
 
 #ifdef __SINGLE
@@ -30,7 +34,7 @@ typedef double MYFLOAT;
 
 #endif
 
-#define DUMP 100
+#define DUMP 1000
 
 /*
  * conversions from discrete to real coordinates
@@ -64,7 +68,9 @@ MYFLOAT integral(int nx, int ny, int ny_global, MYFLOAT* val, MYFLOAT lx, MYFLOA
 void init(MYFLOAT *temp, int MyID, int nx, int ny, int ny_global, int offset, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
   int ix, iy, iy_global;
   MYFLOAT x, y;
-
+#ifdef LINK_OMP
+#pragma omp parallel for private(iy_global, ix, x, y)
+#endif
   for(iy=1;iy<=ny;++iy){
     iy_global = iy + offset + ny * MyID;
     for(ix=1;ix<=nx;++ix){
@@ -130,8 +136,8 @@ void save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, int ny_global, MYFLOA
 
 void update_boundaries_FLAT(int MyID, int NPE, int nx, int ny, MYFLOAT *temp){
 
-  int ix, iy, prev, next;
-  MYFLOAT *buf_send_up, *buf_send_down, *buf_rec_up, *buf_rec_down;
+  /* int ix, iy,  */
+  int prev, next;
 
   int send_up_tag = 42;
   int send_down_tag = 24;
@@ -169,14 +175,18 @@ void evolve(int nx, int ny, int ny_global, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, M
 
     dx = lx/nx;
     dy = ly/ny_global;
-
+#ifdef LINK_OMP
+#pragma omp parallel for private(ix)
+#endif
     for(iy=1;iy<=ny;++iy)
 	for(ix=1;ix<=nx;++ix){
 	    temp_new[((nx+2)*iy)+ix] = temp[((nx+2)*iy)+ix] + alpha*dt*
               ( (temp[((nx+2)*(iy+1))+ix] + temp[((nx+2)*(iy-1))+ix] -2.0* temp[((nx+2)*iy)+ix])/(dy*dy) + 
                 (temp[((nx+2)*iy)+(ix+1)] + temp[((nx+2)*iy)+(ix-1)] -2.0* temp[((nx+2)*iy)+ix])/(dx*dx) );
 	}
-
+#ifdef LINK_OMP
+#pragma omp parallel for private(ix)
+#endif
     for(iy=0;iy<=ny+1;++iy)
     	for(ix=0;ix<=nx+1;++ix)
     	    temp[((nx+2)*iy)+ix] = temp_new[((nx+2)*iy)+ix];
@@ -217,12 +227,12 @@ int main(int argc, char* argv[]){
     MPI_Comm_size(MPI_COMM_WORLD, &NPE);
 
     // number of points in the x directions
-    nx = 100;
+    nx = 2048*4;
     nCols= nx + 2;
     // number of points in the y directions
-    ny_global = 50;
+    ny_global = 2048*4;
 
-    if(ny_global < NPE != 0){
+    if(ny_global < NPE){
       printf("\n\tNumber of rows must be greater than NPE\n\tExit!\n");
       return 1;
     }

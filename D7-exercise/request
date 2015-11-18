@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#PBS -N first_omp
+#PBS -l walltime=00:5:00
+#PBS -l nodes=1:ppn=20
+#PBS -q reserved4
+
+cd $PBS_O_WORKDIR
+
+module load openmpi/1.8.3/gnu/4.9.2
+
+# for NP in 1 2 4 8 10 12 14 16 18 20
+# do
+
+# export OMP_NUM_THREADS=$NP
+
+# ./OptMatTransp.x 64 256 #128
+# #./Heat_equation_serial.x 100 0.0000000001
+
+# done
+
+export OMP_NUM_THREADS=2
+mpirun --map-by ppr:5:socket:pe=2 Heat_equation_parallel.x 200 0.00000001
+
+# mpirun -np 120 Heat_equation_parallel.x 200 0.00000001

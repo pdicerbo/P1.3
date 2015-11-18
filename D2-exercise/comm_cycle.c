@@ -55,7 +55,8 @@ int main(int argc, char** argv){
     if(j < NPE - 2)
       MPI_Isend(arr_rec, SIZE, MPI_DOUBLE, right, tag, MPI_COMM_WORLD, &request);
 
-    MPI_Wait(&first_request, &status);
+    if(j == 0)
+      MPI_Wait(&first_request, &status);
 
     for(k = 0; k < SIZE; k++)
       arr_sum[k] += arr_rec[k];
