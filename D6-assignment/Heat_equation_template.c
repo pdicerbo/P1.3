@@ -142,96 +142,20 @@ void update_boundaries_FLAT(int MyID, int NPE, int nx, int ny, MYFLOAT *temp){
   prev = (MyID + NPE - 1) % NPE;
   next = (MyID + 1) % NPE;
 
-  for(iy = 1; iy <= ny; iy++){
-    temp[(nx + 2)*iy] = temp[(nx + 2)*iy + 1];
-    temp[(nx + 1) + (nx + 2)*iy] = temp[nx + (nx + 2)*iy];
-  }
+  if(MyID == 0)
+    prev = MPI_PROC_NULL;
+  if(MyID == NPE - 1)
+    next = MPI_PROC_NULL;
 
-  if(MyID > 0 && MyID < NPE - 1){
-
-    buf_send_up   = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-    buf_send_down = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-    buf_rec_up    = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-    buf_rec_down  = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-      
-    for(ix = 0; ix < nx + 2; ix++){
-      buf_send_up[ix] = temp[nx + 2 + ix];
-      buf_send_down[ix] = temp[(nx + 2) * ny + ix];
-    }
-
-    MPI_Isend(buf_send_up, (nx+2), MY_MPI_FLOAT, prev, send_up_tag, MPI_COMM_WORLD, &send_up);
-    MPI_Isend(buf_send_down, (nx+2), MY_MPI_FLOAT, next, send_down_tag, MPI_COMM_WORLD, &send_down);
+  MPI_Isend(temp + nx + 2, (nx+2), MY_MPI_FLOAT, prev, send_up_tag, MPI_COMM_WORLD, &send_up);
+  MPI_Isend(temp + (nx + 2) * ny, (nx+2), MY_MPI_FLOAT, next, send_down_tag, MPI_COMM_WORLD, &send_down);
     
-    MPI_Irecv(buf_rec_up, (nx+2), MY_MPI_FLOAT, prev, send_down_tag, MPI_COMM_WORLD, &rec_up);
-    MPI_Recv(buf_rec_down, (nx+2), MY_MPI_FLOAT, next, send_up_tag, MPI_COMM_WORLD, &rec_down);
+  MPI_Irecv(temp, (nx+2), MY_MPI_FLOAT, prev, send_down_tag, MPI_COMM_WORLD, &rec_up);
+  MPI_Recv(temp + (nx + 2) * (ny + 1), (nx+2), MY_MPI_FLOAT, next, send_up_tag, MPI_COMM_WORLD, &rec_down);
 
-    for(ix = 0; ix < nx + 2; ix++)
-      temp[(nx + 2) * (ny + 1) + ix] = buf_rec_down[ix];
-
-    MPI_Wait(&rec_up, &status);
-    
-    for(ix = 0; ix < nx + 2; ix++)
-      temp[ix] = buf_rec_up[ix];
-
-    MPI_Wait(&send_up, &status);
-    MPI_Wait(&send_down, &status);
-
-    free(buf_send_up);
-    free(buf_send_down);
-    free(buf_rec_up);
-    free(buf_rec_down);
-  }
-  else if(MyID == 0){
-
-    buf_send_down = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-    buf_rec_down  = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-      
-    for(ix = 0; ix < nx + 2; ix++)
-      buf_send_down[ix] = temp[(nx + 2) * ny + ix];
-
-    MPI_Isend(buf_send_down, (nx+2), MY_MPI_FLOAT, next, send_down_tag, MPI_COMM_WORLD, &send_down);
-
-    MPI_Irecv(buf_rec_down, (nx+2), MY_MPI_FLOAT, next, send_up_tag, MPI_COMM_WORLD, &rec_up);
-
-    /* update first row of matrix */
-    for(iy = 0; iy < nx + 2; iy++)
-      temp[iy] = temp[(nx + 2) + iy];
-
-    MPI_Wait(&rec_up, &status);
-
-    for(ix = 0; ix < nx + 2; ix++)
-      temp[(nx + 2) * (ny + 1) + ix] = buf_rec_down[ix];
-
-    MPI_Wait(&send_down, &status);
-
-    free(buf_send_down);
-    free(buf_rec_down);
-  }
-  else{
-    buf_send_up = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-    buf_rec_up  = (MYFLOAT*)malloc((nx + 2) * sizeof(MYFLOAT));
-    
-    for(ix = 0; ix < nx + 2; ix++)
-      buf_send_up[ix] = temp[nx + 2 + ix];
-
-    MPI_Isend(buf_send_up, (nx+2), MY_MPI_FLOAT, prev, send_up_tag, MPI_COMM_WORLD, &send_up);
-    
-    MPI_Irecv(buf_rec_up, (nx+2), MY_MPI_FLOAT, prev, send_down_tag, MPI_COMM_WORLD, &rec_up);
-    
-    /* update last row of matrix */
-    for(ix = 0; ix < nx + 2; ix++)
-      temp[(nx + 2) * (ny + 1) + ix] = temp[(nx + 2) * ny + ix];
-
-    MPI_Wait(&rec_up, &status);
-    
-    for(ix = 0; ix < nx + 2; ix++)
-      temp[ix] = buf_rec_up[ix];
-
-    MPI_Wait(&send_up, &status);
-
-    free(buf_send_up);
-    free(buf_rec_up);
-  }
+  MPI_Wait(&rec_up, &status);  
+  MPI_Wait(&send_up, &status);
+  MPI_Wait(&send_down, &status);
 }
 
 /*
