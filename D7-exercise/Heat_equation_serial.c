@@ -162,7 +162,7 @@ int main(int argc, char* argv[]){
     MYFLOAT lx, ly, alpha, dt, x0, y0, sigmax, sigmay;
     MYFLOAT *temp, *temp_new;
     MYFLOAT norm, norm_ini, bound;
-    FILE *fp;
+    FILE *fp, *agg;
 
     double t_start, t_end, t_sum = 0.;
 
@@ -174,10 +174,10 @@ int main(int argc, char* argv[]){
        }
 
     // number of points in the x directions
-    nx=100; //4000;
+    nx=4000;
     nCols= nx + 2;
     // number of points in the y directions
-    ny=100; //4000;
+    ny=4000;
     nRows= ny + 2;
     // size of the system in the x direction
     lx=2.0;
@@ -215,7 +215,7 @@ int main(int argc, char* argv[]){
 
     fp = fopen("heat_diffusion.dat", "w");
 
-    frame=n_steps/100;
+    frame=n_steps;
     printf(" Starting time evolution... \n\n ");
     t_start = seconds();
     for(i=1; i<=n_steps; ++i) {
@@ -240,7 +240,10 @@ int main(int argc, char* argv[]){
     printf("\t-----------------------\n");
     printf("\tNumber of threads: %d\n", omp_get_max_threads());
 #endif
-    printf(" Time used: %lg s\n", t_sum);
+    printf("\tTime used: %lg s\n\n", t_sum);
+    agg = fopen("aggiorn.dat", "a");
+    fprintf(agg, "\nrun with %d threads. Time used = %lg s.", omp_get_max_threads(), t_sum);
+    fclose(agg);
     fclose(fp); 
 
     return 0;

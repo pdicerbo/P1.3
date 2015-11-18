@@ -1,9 +1,9 @@
 CC = gcc
 LIBS = -lm
-CFLAGS = -Wall
+CFLAGS = -Wall -O3
 SRCS = hello_world.c
 OBJS = ${SRCS:.c=.o}
-EXEC = hello_world.x Heat_equation_serial.x
+EXEC = hello_world.x Heat_equation_serial.x OptMatTransp.x
 
 all: $(EXEC)
 
