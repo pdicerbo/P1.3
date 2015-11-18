@@ -162,7 +162,10 @@ int main(int argc, char* argv[]){
     MYFLOAT lx, ly, alpha, dt, x0, y0, sigmax, sigmay;
     MYFLOAT *temp, *temp_new;
     MYFLOAT norm, norm_ini, bound;
-    FILE *fp, *agg;
+    FILE *fp;
+#ifdef LINK_OMP
+    FILE *agg;
+#endif
 
     double t_start, t_end, t_sum = 0.;
 
@@ -241,9 +244,11 @@ int main(int argc, char* argv[]){
     printf("\tNumber of threads: %d\n", omp_get_max_threads());
 #endif
     printf("\tTime used: %lg s\n\n", t_sum);
+#ifdef LINK_OMP
     agg = fopen("aggiorn.dat", "a");
     fprintf(agg, "\nrun with %d threads. Time used = %lg s.", omp_get_max_threads(), t_sum);
     fclose(agg);
+#endif
     fclose(fp); 
 
     return 0;
