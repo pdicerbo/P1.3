@@ -12,8 +12,6 @@ t2 = mat1[:,1]
 t3 = mat2[:,1]
 t4 = mat3[:,1]
 
-# th = np.array(nth, dtype = int)
-# sp = np.array(t, dtype = float)
 speed  = np.array([t1[0] / t1[i] for i in range(len(t1))])
 speed1 = np.array([t1[0] / t2[i] for i in range(len(t2))])
 speed2 = np.array([t1[0] / t3[i] for i in range(len(t3))])
@@ -27,7 +25,7 @@ plt.plot(th, speed,  '-o', label = 'OMP_NUM_THREADS = 0')
 plt.plot(th, speed1, '-o', label = 'OMP_NUM_THREADS = 2')
 plt.plot(th, speed2, '-o', label = 'OMP_NUM_THREADS = 5')
 plt.plot(th, speed3, '-o', label = 'OMP_NUM_THREADS = 10')
-# plt.plot(th, th, label = 'att')
+
 plt.xlabel("Number of nodes")
 plt.ylabel("Speedup")
 plt.title("MPI vs OpenMP scaling")
