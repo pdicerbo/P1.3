@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#PBS -N first_cuda
+#PBS -l walltime=00:01:00
+#PBS -l nodes=1:ppn=20:gpu
+#PBS -q reserved4
+
+cd $PBS_O_WORKDIR
+
+module load cudatoolkit/6.5
+
+./cuda_stuff.x
