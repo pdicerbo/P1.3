@@ -9,13 +9,4 @@ cd $PBS_O_WORKDIR
 
 module load cudatoolkit/6.5
 
-./reverse.x
-# for NP in 1 2 4 8 10 12 14 16 18 20
-# do
-
-# export OMP_NUM_THREADS=$NP
-
-# ./OptMatTransp.x 64 256 #128
-# #./Heat_equation_serial.x 100 0.0000000001
-
-# done
+./cuda_stuff.x

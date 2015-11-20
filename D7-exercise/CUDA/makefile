@@ -2,7 +2,7 @@
 CC = nvcc
 LIBS = 
 CFLAGS = 
-EXEC = reverse.x
+EXEC = cuda_stuff.x
 
 all: $(EXEC)
 
