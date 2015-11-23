@@ -1,6 +1,6 @@
 typedef float MYFLOAT;
 
-#define PI 3.1415926
+#define PI 3.14159265359
 
 __device__ MYFLOAT gpu_ix2x(int ix, int nx, MYFLOAT lx){
   return ((ix) - nx / 2.0)*lx/nx;
@@ -19,6 +19,7 @@ you must call this kernel with a number of threads and a number of blocks such t
 NBLOCKS * THREADS_PER_BLOCK = SIZE */
 
 __global__ void parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
+
   int ix, iy, offset;
   MYFLOAT x, y;
   
@@ -31,3 +32,24 @@ __global__ void parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT
   
   temp[offset] = 1.0 / (2. * PI * sigmax * sigmay) * exp(-(x - x0)*(x - x0) / (2.0*(sigmax * sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay * sigmay)) );
 }
+
+__global__ void update_up_down(int nx, int ny, MYFLOAT *temp){
+
+  int ix;
+  
+  ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
+
+  temp[ix] = temp[ix + blockDim.x * gridDim.x + 2];
+  temp[(ny + 1) * (nx + 2) + ix] = temp[ny * (nx + 2) + ix];
+}
+
+__global__ void update_left_right(int nx, int ny, MYFLOAT *temp){
+
+  int ix;
+  
+  ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
+
+  temp[ix * (nx + 2)] = temp[ix * (nx + 2) + 1];
+  temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx]; //temp[ix * (nx + 2) + nx + 1];
+}
+

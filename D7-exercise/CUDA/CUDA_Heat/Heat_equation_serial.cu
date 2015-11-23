@@ -26,6 +26,8 @@ typedef float MYFLOAT;
 #define BLOCKS 2
 #define THREADS 5
 __global__ void parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
+__global__ void update_up_down(int, int, MYFLOAT*);
+__global__ void update_left_right(int, int, MYFLOAT*);
 #endif
 
 /* 
@@ -226,17 +228,15 @@ int main(int argc, char* argv[]){
 
   dim3 blocks(BLOCKS, BLOCKS);
   dim3 threads(THREADS, THREADS);
-  // dim3 blocks, threads;
-  // blocks.x = BLOCKS;
-  // blocks.y = BLOCKS;
-  // threads.x = THREADS;
-  // threads.y = THREADS;
 
   parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
+  update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
+
   cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
 
-  for(i = 1; i <= ny; i++){
-    for(j = 1; j <= nx; j++)
+  for(i = 0; i <= ny + 1; i++){
+    for(j = 0; j <= nx + 1; j++)
       printf("\t%lg", temp[(nx + 2) * i + j]);
     printf("\n");
   }
@@ -245,8 +245,9 @@ int main(int argc, char* argv[]){
   printf("\n--------------------\n\n");
   // fill temperaature array with initial condition, imposing flat boundary conditions
   init(temp_new, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  for(i = 1; i <= ny; i++){
-    for(j = 1; j <= nx; j++)
+  update_boundaries_FLAT(nx, ny, temp_new);
+  for(i = 0; i <= ny + 1; i++){
+    for(j = 0; j <= nx + 1; j++)
       printf("\t%lg", temp_new[(nx + 2) * i + j]);
     printf("\n");
   }
