@@ -50,6 +50,6 @@ __global__ void update_left_right(int nx, int ny, MYFLOAT *temp){
   ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
 
   temp[ix * (nx + 2)] = temp[ix * (nx + 2) + 1];
-  temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx]; //temp[ix * (nx + 2) + nx + 1];
+  temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx];
 }
 
