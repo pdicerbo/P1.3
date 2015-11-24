@@ -23,11 +23,12 @@
 typedef float MYFLOAT;
 
 #ifdef __CUDA
-#define BLOCKS 2
-#define THREADS 5
+#define BLOCKS 5
+#define THREADS 2
 __global__ void parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
 __global__ void update_up_down(int, int, MYFLOAT*);
 __global__ void update_left_right(int, int, MYFLOAT*);
+__global__ void parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
 #endif
 
 /* 
@@ -232,8 +233,12 @@ int main(int argc, char* argv[]){
   parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
   update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
   update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
+  parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
 
-  cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
+  update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
+  update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
+
+  cudaMemcpy(temp, dev_temp_new, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
 
   for(i = 0; i <= ny + 1; i++){
     for(j = 0; j <= nx + 1; j++)
@@ -244,11 +249,13 @@ int main(int argc, char* argv[]){
   temp_new = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
   printf("\n--------------------\n\n");
   // fill temperaature array with initial condition, imposing flat boundary conditions
-  init(temp_new, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  update_boundaries_FLAT(nx, ny, temp_new);
+  init(temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  update_boundaries_FLAT(nx, ny, temp);
+  evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
+  update_boundaries_FLAT(nx, ny, temp);
   for(i = 0; i <= ny + 1; i++){
     for(j = 0; j <= nx + 1; j++)
-      printf("\t%lg", temp_new[(nx + 2) * i + j]);
+      printf("\t%lg", temp[(nx + 2) * i + j]);
     printf("\n");
   }
   exit(0);

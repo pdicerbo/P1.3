@@ -23,12 +23,12 @@ __global__ void parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT
   int ix, iy, offset;
   MYFLOAT x, y;
   
-  ix = threadIdx.x + blockIdx.x * blockDim.x;
-  iy = threadIdx.y + blockIdx.y * blockDim.y;
-  offset = ix + (iy + 1) * ( blockDim.x * gridDim.x + 2) + 1;
+  ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
+  iy = threadIdx.y + blockIdx.y * blockDim.y + 1;
+  offset = ix + iy * ( blockDim.x * gridDim.x + 2);
   
-  x = gpu_ix2x(ix, nx, lx);
-  y = gpu_iy2y(iy, ny, ly);
+  x = gpu_ix2x(ix - 1, nx, lx);
+  y = gpu_iy2y(iy - 1, ny, ly);
   
   temp[offset] = 1.0 / (2. * PI * sigmax * sigmay) * exp(-(x - x0)*(x - x0) / (2.0*(sigmax * sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay * sigmay)) );
 }
@@ -53,3 +53,43 @@ __global__ void update_left_right(int nx, int ny, MYFLOAT *temp){
   temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx];
 }
 
+__global__ void parallel_evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, MYFLOAT *temp_new, MYFLOAT alpha){
+    
+  MYFLOAT dx, dy;
+  int ix = threadIdx.x + 1;
+  int iy = threadIdx.y + 1;
+  int offset = ix + blockIdx.x * blockDim.x + (iy + blockIdx.y * blockDim.y ) * ( blockDim.x * gridDim.x + 2);
+  
+  dx = lx/nx;
+  dy = ly/ny;
+  
+  extern __shared__ MYFLOAT temp_shrd[];
+  extern __shared__ MYFLOAT temp_new_shrd[];
+  
+  temp_shrd[ix + iy * ( blockDim.x + 2 )] = temp[offset];
+  
+  if(iy == 1)
+    temp_shrd[ix] = temp_shrd[ix + iy * ( blockDim.x + 2 )];
+  
+  if(iy == blockDim.y)
+    temp_shrd[ix + ( blockDim.y + 1 ) * ( blockDim.x + 2 )] = temp_shrd[ix + iy * ( blockDim.x + 2 )];
+  
+  if(ix == 1)
+    temp_shrd[ix + iy * ( blockDim.x + 2 ) - 1] = temp_shrd[ix + iy * ( blockDim.x + 2 ) - 1];
+  
+  if(ix == blockDim.x)
+    temp_shrd[ix + iy * ( blockDim.x + 2 ) + 1] = temp_shrd[ix + iy * ( blockDim.x + 2 )];
+  
+  __syncthreads();
+  
+  
+  temp_new_shrd[ix + iy * ( blockDim.x + 2 )] = temp_shrd[ix + iy * ( blockDim.x + 2 )] + 
+    alpha * dt *( (temp_shrd[ix + ( iy + 1 ) * ( blockDim.x + 2 )] + 
+		   temp_shrd[ix + ( iy - 1 ) * ( blockDim.x + 2 )] - 
+		   2.0 * temp_shrd[ix + iy * ( blockDim.x + 2 )] ) / (dy * dy) +
+		  (temp_shrd[ix + 1 + iy * ( blockDim.x + 2 )] 
+		   + temp_shrd[ix - 1 + iy * ( blockDim.x + 2 )] - 
+		   2.0 * temp_shrd[ix + iy * ( blockDim.x + 2 )] ) / (dx * dx) );
+
+  temp_new[offset] = temp_new_shrd[ix + iy * ( blockDim.x + 2 )];
+}

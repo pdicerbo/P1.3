@@ -6,17 +6,17 @@ SRC = Heat_equation_serial.cu parallel_function.cu
 OBJS = ${SRC:.cu=.o}
 EXEC = Heat_equation_serial.x
 
-all: $(EXEC)
-
-omp: LIBS += -fopenmp
-omp: CFLAGS += -fopenmp -DLINK_OMP
-omp: all
+# omp: LIBS += -fopenmp
+# omp: CFLAGS += -fopenmp -DLINK_OMP
+# omp: all
 
 cuda: CFLAGS+=-D__CUDA
 cuda: parallel_function.o
 cuda: OBJS+=parallel_function.o
 cuda: CC=nvcc
 cuda: all
+
+all: $(EXEC)
 
 %.x : $(OBJS)
 	$(CC) $^ $(LIBS) -o $@
