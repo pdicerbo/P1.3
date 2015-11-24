@@ -233,34 +233,65 @@ int main(int argc, char* argv[]){
   parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
   update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
   update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
-  parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
 
-  update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
-  update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
-
-  cudaMemcpy(temp, dev_temp_new, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
-
-  for(i = 0; i <= ny + 1; i++){
-    for(j = 0; j <= nx + 1; j++)
-      printf("\t%lg", temp[(nx + 2) * i + j]);
-    printf("\n");
-  }
-
-  temp_new = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
-  printf("\n--------------------\n\n");
-  // fill temperaature array with initial condition, imposing flat boundary conditions
   init(temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  update_boundaries_FLAT(nx, ny, temp);
-  evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
-  update_boundaries_FLAT(nx, ny, temp);
-  for(i = 0; i <= ny + 1; i++){
-    for(j = 0; j <= nx + 1; j++)
-      printf("\t%lg", temp[(nx + 2) * i + j]);
-    printf("\n");
-  }
-  exit(0);
 
-#endif
+  norm_ini=integral(nx, ny, temp, lx, ly);
+  printf(" Initial integral value: %f\n", norm_ini);
+
+  fp = fopen("heat_diffusion.dat", "w");
+
+  frame = 50; 
+  printf(" Starting time evolution... \n\n ");
+  t_start = seconds();
+  for(i=1; i<=n_steps; ++i) {
+    // saving a snapshot every 100 time steps
+    if ( (i-1)%frame==0){
+      t_end = seconds();
+      cudaMemcpy(temp, dev_temp_new, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
+      save_gnuplot(fp, temp, nx, ny, lx, ly);
+      t_sum += t_end - t_start;
+      t_start = seconds();
+    }
+    // performing TFSC-FD step and updating boundaries
+    parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
+    update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
+    update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
+    
+    MYFLOAT* tmp;
+    tmp = dev_temp;
+    dev_temp = dev_temp_new;
+    dev_temp_new = tmp;
+
+  }
+  t_end = seconds();
+  t_sum += t_end - t_start;
+
+  norm=integral(nx, ny, temp, lx, ly); 
+  printf(" Integral end: %f\n",norm);
+  printf("\tTime used: %lg s\n\n", t_sum);
+
+  // for(i = 0; i <= ny + 1; i++){
+  //   for(j = 0; j <= nx + 1; j++)
+  //     printf("\t%lg", temp[(nx + 2) * i + j]);
+  //   printf("\n");
+  // }
+
+  // temp_new = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
+  // printf("\n--------------------\n\n");
+  // // fill temperaature array with initial condition, imposing flat boundary conditions
+  // init(temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  // update_boundaries_FLAT(nx, ny, temp);
+  // evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
+  // update_boundaries_FLAT(nx, ny, temp);
+  // for(i = 0; i <= ny + 1; i++){
+  //   for(j = 0; j <= nx + 1; j++)
+  //     printf("\t%lg", temp[(nx + 2) * i + j]);
+  //   printf("\n");
+  // }
+  fclose(fp); 
+
+#else
 
   temp = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
   temp_new = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
@@ -308,6 +339,8 @@ int main(int argc, char* argv[]){
 #endif
   fclose(fp); 
   
+#endif
+
   return 0;
 }
 
