@@ -168,7 +168,7 @@ double seconds(){
 int main(int argc, char* argv[]){
 
   int i, nx, ny, n_steps, nRows, nCols, frame;
-  int j;
+  // int j;
   MYFLOAT lx, ly, alpha, dt, x0, y0, sigmax, sigmay;
 #ifdef __CUDA
   MYFLOAT *temp;
@@ -308,7 +308,7 @@ int main(int argc, char* argv[]){
   
   fp = fopen("heat_diffusion.dat", "w");
 
-  frame=50; //n_steps;
+  frame = 150; //n_steps;
   printf(" Starting time evolution... \n\n ");
   t_start = seconds();
   for(i=1; i<=n_steps; ++i) {

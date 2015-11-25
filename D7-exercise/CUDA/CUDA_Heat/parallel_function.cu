@@ -16,7 +16,7 @@ __global__ void eff_update_up_down(int nx, int ny, MYFLOAT *temp){
   
   ix = threadIdx.x + blockIdx.x * blockDim.x;
 
-  temp[ix] = temp[ix + nx + 2]; //blockDim.x * gridDim.x];
+  temp[ix] = temp[ix + nx + 2];
   temp[(ny + 1) * (nx + 2) + ix] = temp[ny * (nx + 2) + ix];
 }
 
