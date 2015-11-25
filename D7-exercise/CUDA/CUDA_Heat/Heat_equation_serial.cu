@@ -29,6 +29,7 @@ __global__ void parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYF
 __global__ void update_up_down(int, int, MYFLOAT*);
 __global__ void update_left_right(int, int, MYFLOAT*);
 __global__ void parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
+__global__ void efficient_parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
 __global__ void efficient_parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
 #endif
 
@@ -234,7 +235,8 @@ int main(int argc, char* argv[]){
   dim3 ev_blocks(BLOCKS, BLOCKS);
   dim3 ev_threads(THREADS + 2, THREADS + 2);
 
-  parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  // parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  efficient_parallel_init<<<ev_blocks, ev_threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
   update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
   update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
 

@@ -108,6 +108,23 @@ __global__ void parallel_evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT 
   temp_new[offset] = temp_new_shrd[ix + iy * ( blockDim.x + 2 )];
 }
 
+__global__ void efficient_parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
+
+  int ix, iy, offset;
+  MYFLOAT x, y;
+  
+  ix = threadIdx.x + blockIdx.x * ( blockDim.x - 2 );
+  iy = threadIdx.y + blockIdx.y * ( blockDim.y - 2 );
+  // offset = ix + iy * ( blockDim.x - 2 )* gridDim.x;
+  offset = ix + iy * (nx + 2); 
+  
+  x = gpu_ix2x(ix, nx, lx);
+  y = gpu_iy2y(iy, ny, ly);
+  
+  temp[offset] = 1.0 / (2. * PI * sigmax * sigmay) * exp(-(x - x0)*(x - x0) / (2.0*(sigmax * sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay * sigmay)) );
+}
+
+
 __global__ void efficient_parallel_evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, MYFLOAT *temp_new, MYFLOAT alpha){
     
   MYFLOAT dx, dy;
@@ -116,7 +133,7 @@ __global__ void efficient_parallel_evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly
 
   int g_ix = threadIdx.x + blockIdx.x * ( blockDim.x - 2);
   int g_iy = threadIdx.y + blockIdx.y * ( blockDim.y - 2);
-  int offset = g_ix + g_iy * ( blockDim.x - 2 ) * gridDim.x;
+  int offset = g_ix + g_iy * (nx + 2);
   
   dx = lx/nx;
   dy = ly/ny;
