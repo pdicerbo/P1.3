@@ -92,7 +92,7 @@ int save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly
     fprintf(fp, "\n\n");
     for(iy=1;iy<=ny;++iy){		
 	for(ix=1;ix<=nx;++ix)
-	    fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
+	    fprintf(fp, "\t%f\t%f\t%f\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
     }
 
     return 0;
@@ -167,10 +167,15 @@ double seconds(){
 
 int main(int argc, char* argv[]){
 
-  int i, j, nx, ny, n_steps, nRows, nCols, frame;
+  int i, nx, ny, n_steps, nRows, nCols, frame;
+  // int j;
   MYFLOAT lx, ly, alpha, dt, x0, y0, sigmax, sigmay;
-  MYFLOAT *temp, *temp_new;
+#ifdef __CUDA
+  MYFLOAT *temp;
   MYFLOAT *dev_temp, *dev_temp_new;
+#else
+  MYFLOAT *temp, *temp_new;
+#endif
   MYFLOAT norm, norm_ini, bound;
   FILE *fp;
   
@@ -221,10 +226,9 @@ int main(int argc, char* argv[]){
   if (dt>bound  )
     printf("Warning, unstable regime, reduce dt \n");
   
+  temp = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
 
 #ifdef __CUDA
-
-  temp = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
 
   cudaMalloc((void**)&dev_temp, nRows * nCols * sizeof(MYFLOAT));
   cudaMalloc((void**)&dev_temp_new, nRows * nCols * sizeof(MYFLOAT));
@@ -232,11 +236,11 @@ int main(int argc, char* argv[]){
   dim3 blocks(BLOCKS, BLOCKS);
   dim3 threads(THREADS, THREADS);
 
-  dim3 ev_blocks(BLOCKS, BLOCKS);
-  dim3 ev_threads(THREADS + 2, THREADS + 2);
+  dim3 eff_blocks(BLOCKS, BLOCKS);
+  dim3 eff_threads(THREADS + 2, THREADS + 2);
 
   // parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  efficient_parallel_init<<<ev_blocks, ev_threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  efficient_parallel_init<<<eff_blocks, eff_threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
   update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
   update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
 
@@ -260,27 +264,45 @@ int main(int argc, char* argv[]){
       t_start = seconds();
     }
     // performing TFSC-FD step and updating boundaries
-
+    
     // parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
-
-    efficient_parallel_evolve<<<ev_blocks, ev_threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
-
+    
+    efficient_parallel_evolve<<<eff_blocks, eff_threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
+    
     update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
     update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
+    
+    // cudaMemcpy(temp, dev_temp_new, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
+    
+    // for(i = 1; i < nx + 1; i++){
+    //   for(j = 1; j < ny + 1; j++)
+    // 	printf("\t%f", temp[j + i*(ny + 2)]);
+    //   printf("\n");
+    // }
+
+    // exit(0);
     
     MYFLOAT* tmp;
     tmp = dev_temp;
     dev_temp = dev_temp_new;
     dev_temp_new = tmp;
-
+    
+    // cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
+    // for(i = 1; i < nx + 1; i++){
+    //   for(j = 1; j < ny + 1; j++)
+    // 	printf("\t%f", temp[j + i*(ny + 2)]);
+    //   printf("\n");
+    // }
+    // save_gnuplot(fp, temp, nx, ny, lx, ly);
+    
   }
   t_end = seconds();
   t_sum += t_end - t_start;
-
+  
   norm=integral(nx, ny, temp, lx, ly); 
   printf(" Integral end: %f\n",norm);
   printf("\tTime used: %lg s\n\n", t_sum);
-
+  
   // for(i = 0; i <= ny + 1; i++){
   //   for(j = 0; j <= nx + 1; j++)
   //     printf("\t%lg", temp[(nx + 2) * i + j]);
@@ -303,7 +325,6 @@ int main(int argc, char* argv[]){
 
 #else
 
-  temp = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
   temp_new = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
 
   // fill temperaature array with initial condition, imposing flat boundary conditions
@@ -316,7 +337,7 @@ int main(int argc, char* argv[]){
   
   fp = fopen("heat_diffusion.dat", "w");
 
-  frame=n_steps;
+  frame=50; //n_steps;
   printf(" Starting time evolution... \n\n ");
   t_start = seconds();
   for(i=1; i<=n_steps; ++i) {
@@ -330,6 +351,22 @@ int main(int argc, char* argv[]){
     // performing TFSC-FD step and updating boundaries
     evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
     update_boundaries_FLAT(nx, ny, temp);
+
+    // for(i = 1; i < nx + 1; i++){
+    //   for(j = 1; j < ny + 1; j++)
+    // 	printf("\t%f", temp[j + i*(ny + 2)]);
+    //   printf("\n");
+    // }
+    // exit(0);
+
+    // for(i = 1; i < nx + 1; i++){
+    //   for(j = 1; j < ny + 1; j++)
+    // 	printf("\t%f", temp[j + i*(ny + 2)]);
+    //   printf("\n");
+    // }
+    
+    // save_gnuplot(fp, temp, nx, ny, lx, ly);
+    
   }
   t_end = seconds();
   t_sum += t_end - t_start;

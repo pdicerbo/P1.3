@@ -10,29 +10,6 @@ __device__ MYFLOAT gpu_iy2y(int iy, int ny, MYFLOAT ly){
   return ((iy) - ny / 2.0)*ly/ny;
 }
 
-
-/* function that initialize the temperature matrix on GPU. 
-the initialization is done taking into account the presence of the ghosts cell
-at the neighbour of the matrix. In this way, if SIZE is the size of the matrix without 
-taking into accout the presence of the ghosts cell, to do the correct initialization
-you must call this kernel with a number of threads and a number of blocks such that
-NBLOCKS * THREADS_PER_BLOCK = SIZE */
-
-__global__ void parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
-
-  int ix, iy, offset;
-  MYFLOAT x, y;
-  
-  ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
-  iy = threadIdx.y + blockIdx.y * blockDim.y + 1;
-  offset = ix + iy * ( blockDim.x * gridDim.x + 2);
-  
-  x = gpu_ix2x(ix - 1, nx, lx);
-  y = gpu_iy2y(iy - 1, ny, ly);
-  
-  temp[offset] = 1.0 / (2. * PI * sigmax * sigmay) * exp(-(x - x0)*(x - x0) / (2.0*(sigmax * sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay * sigmay)) );
-}
-
 __global__ void update_up_down(int nx, int ny, MYFLOAT *temp){
 
   int ix;
@@ -63,63 +40,14 @@ __global__ void update_left_right(int nx, int ny, MYFLOAT *temp){
   // temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx];
 }
 
-__global__ void parallel_evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT dt, MYFLOAT *temp, MYFLOAT *temp_new, MYFLOAT alpha){
-    
-  MYFLOAT dx, dy;
-  int ix = threadIdx.x + 1;
-  int iy = threadIdx.y + 1;
-
-  int g_ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
-  int g_iy = threadIdx.y + blockIdx.y * blockDim.y + 1;
-  int offset = g_ix + g_iy * ( blockDim.x * gridDim.x + 2);
-  // int offset = ix + blockIdx.x * blockDim.x + (iy + blockIdx.y * blockDim.y ) * ( blockDim.x * gridDim.x + 2);
-  
-  dx = lx/nx;
-  dy = ly/ny;
-  
-  extern __shared__ MYFLOAT temp_shrd[];
-  extern __shared__ MYFLOAT temp_new_shrd[];
-  
-  temp_shrd[ix + iy * ( blockDim.x + 2 )] = temp[offset];
-  
-  if(iy == 1)
-    temp_shrd[ix] = temp_shrd[ix + blockDim.x + 2];
-  
-  if(iy == blockDim.y)
-    temp_shrd[ix + ( blockDim.y + 1 ) * ( blockDim.x + 2 )] = temp_shrd[ix + iy * ( blockDim.x + 2 )];
-  
-  if(ix == 1)
-    temp_shrd[ix + iy * ( blockDim.x + 2 ) - 1] = temp_shrd[ix + iy * ( blockDim.x + 2 )];
-  
-  if(ix == blockDim.x)
-    temp_shrd[ix + iy * ( blockDim.x + 2 ) + 1] = temp_shrd[ix + iy * ( blockDim.x + 2 )];
-  
-  __syncthreads();
-  
-  
-  temp_new_shrd[ix + iy * ( blockDim.x + 2 )] = temp_shrd[ix + iy * ( blockDim.x + 2 )] + 
-    alpha * dt *( (temp_shrd[ix + ( iy + 1 ) * ( blockDim.x + 2 )] + 
-		   temp_shrd[ix + ( iy - 1 ) * ( blockDim.x + 2 )] - 
-		   2.0 * temp_shrd[ix + iy * ( blockDim.x + 2 )] ) / (dy * dy) +
-		  (temp_shrd[ix + 1 + iy * ( blockDim.x + 2 )] + 
-		   temp_shrd[ix - 1 + iy * ( blockDim.x + 2 )] - 
-		   2.0 * temp_shrd[ix + iy * ( blockDim.x + 2 )] ) / (dx * dx) );
-  
-  temp_new[offset] = temp_new_shrd[ix + iy * ( blockDim.x + 2 )];
-}
-
 __global__ void efficient_parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
 
-  int ix, iy, offset;
-  MYFLOAT x, y;
+  int ix = threadIdx.x + blockIdx.x * ( blockDim.x - 2 );
+  int iy = threadIdx.y + blockIdx.y * ( blockDim.y - 2 );
+  int offset = ix + iy * (nx + 2); 
   
-  ix = threadIdx.x + blockIdx.x * ( blockDim.x - 2 );
-  iy = threadIdx.y + blockIdx.y * ( blockDim.y - 2 );
-  // offset = ix + iy * ( blockDim.x - 2 )* gridDim.x;
-  offset = ix + iy * (nx + 2); 
-  
-  x = gpu_ix2x(ix, nx, lx);
-  y = gpu_iy2y(iy, ny, ly);
+  MYFLOAT x = gpu_ix2x(ix - 1, nx, lx);
+  MYFLOAT y = gpu_iy2y(iy - 1, ny, ly);
   
   temp[offset] = 1.0 / (2. * PI * sigmax * sigmay) * exp(-(x - x0)*(x - x0) / (2.0*(sigmax * sigmax)) - (y-y0)*(y-y0)/(2.0*(sigmay * sigmay)) );
 }
@@ -153,7 +81,8 @@ __global__ void efficient_parallel_evolve(int nx, int ny, MYFLOAT lx, MYFLOAT ly
 		    (temp_shrd[ix + 1 + iy * blockDim.x] + 
 		     temp_shrd[ix - 1 + iy * blockDim.x] - 
 		     2.0 * temp_shrd[ix + iy * blockDim.x] ) / (dx * dx) );
-    
+
+
     temp_new[offset] = temp_new_shrd[ix + iy * blockDim.x];
   }
 }
