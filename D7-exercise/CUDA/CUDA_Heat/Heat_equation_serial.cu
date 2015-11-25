@@ -20,15 +20,15 @@
 
 #define PI 3.14159265359
 
-typedef float MYFLOAT;
+typedef double MYFLOAT;
 
 #ifdef __CUDA
 #define BLOCKS 10
-#define THREADS 10
-__global__ void parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
-__global__ void update_up_down(int, int, MYFLOAT*);
-__global__ void update_left_right(int, int, MYFLOAT*);
-__global__ void parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
+#define THREADS 32
+// __global__ void parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
+__global__ void eff_update_up_down(int, int, MYFLOAT*);
+__global__ void eff_update_left_right(int, int, MYFLOAT*);
+// __global__ void parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
 __global__ void efficient_parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
 __global__ void efficient_parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
 #endif
@@ -92,7 +92,7 @@ int save_gnuplot(FILE* fp, MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly
     fprintf(fp, "\n\n");
     for(iy=1;iy<=ny;++iy){		
 	for(ix=1;ix<=nx;++ix)
-	    fprintf(fp, "\t%f\t%f\t%f\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
+	    fprintf(fp, "\t%f\t%f\t%g\n", ix2x(ix,nx,lx), iy2y(iy,ny,ly), temp[((nx+2)*iy)+ix]);
     }
 
     return 0;
@@ -168,7 +168,7 @@ double seconds(){
 int main(int argc, char* argv[]){
 
   int i, nx, ny, n_steps, nRows, nCols, frame;
-  // int j;
+  int j;
   MYFLOAT lx, ly, alpha, dt, x0, y0, sigmax, sigmay;
 #ifdef __CUDA
   MYFLOAT *temp;
@@ -193,11 +193,11 @@ int main(int argc, char* argv[]){
     }
   
   // number of points in the x directions
-  nx = 100; //4000;
+  nx = 300;
   nCols= nx + 2;
   
   // number of points in the y directions
-  ny = 100; //4000;
+  ny = 300;
   nRows= ny + 2;
   
   // size of the system in the x direction
@@ -236,22 +236,19 @@ int main(int argc, char* argv[]){
   dim3 blocks(BLOCKS, BLOCKS);
   dim3 threads(THREADS, THREADS);
 
-  dim3 eff_blocks(BLOCKS, BLOCKS);
-  dim3 eff_threads(THREADS + 2, THREADS + 2);
+  efficient_parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
+  eff_update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
+  eff_update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
 
-  // parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  efficient_parallel_init<<<eff_blocks, eff_threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
-  update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
-
+  // cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
   init(temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
 
   norm_ini=integral(nx, ny, temp, lx, ly);
-  printf(" Initial integral value: %f\n", norm_ini);
+  printf(" Initial integral value: %g\n", norm_ini);
 
   fp = fopen("heat_diffusion.dat", "w");
 
-  frame = 50; 
+  frame = 150; 
   printf(" Starting time evolution... \n\n ");
   t_start = seconds();
   for(i=1; i<=n_steps; ++i) {
@@ -265,62 +262,36 @@ int main(int argc, char* argv[]){
     }
     // performing TFSC-FD step and updating boundaries
     
-    // parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
+    efficient_parallel_evolve<<<blocks, threads, THREADS * THREADS * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
     
-    efficient_parallel_evolve<<<eff_blocks, eff_threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
-    
-    update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
-    update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
-    
-    // cudaMemcpy(temp, dev_temp_new, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
-    
-    // for(i = 1; i < nx + 1; i++){
-    //   for(j = 1; j < ny + 1; j++)
-    // 	printf("\t%f", temp[j + i*(ny + 2)]);
-    //   printf("\n");
-    // }
+    eff_update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
+    eff_update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
 
-    // exit(0);
-    
     MYFLOAT* tmp;
     tmp = dev_temp;
     dev_temp = dev_temp_new;
     dev_temp_new = tmp;
     
     // cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
-    // for(i = 1; i < nx + 1; i++){
-    //   for(j = 1; j < ny + 1; j++)
-    // 	printf("\t%f", temp[j + i*(ny + 2)]);
+    
+    // for(i = 0; i < nx + 2; i++){
+    //   for(j = 0; j < ny + 2; j++)
+    // 	printf("\t%lg", temp[j + i*(nx + 2)]);
     //   printf("\n");
     // }
-    // save_gnuplot(fp, temp, nx, ny, lx, ly);
-    
+
+    // exit(0);
   }
+  
   t_end = seconds();
   t_sum += t_end - t_start;
+
+  cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
   
-  norm=integral(nx, ny, temp, lx, ly); 
-  printf(" Integral end: %f\n",norm);
+  norm = integral(nx, ny, temp, lx, ly); 
+  printf(" Integral end: %lg\n",norm);
   printf("\tTime used: %lg s\n\n", t_sum);
   
-  // for(i = 0; i <= ny + 1; i++){
-  //   for(j = 0; j <= nx + 1; j++)
-  //     printf("\t%lg", temp[(nx + 2) * i + j]);
-  //   printf("\n");
-  // }
-
-  // temp_new = (MYFLOAT *)malloc(nRows * nCols * sizeof(MYFLOAT));
-  // printf("\n--------------------\n\n");
-  // // fill temperaature array with initial condition, imposing flat boundary conditions
-  // init(temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
-  // update_boundaries_FLAT(nx, ny, temp);
-  // evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
-  // update_boundaries_FLAT(nx, ny, temp);
-  // for(i = 0; i <= ny + 1; i++){
-  //   for(j = 0; j <= nx + 1; j++)
-  //     printf("\t%lg", temp[(nx + 2) * i + j]);
-  //   printf("\n");
-  // }
   fclose(fp); 
 
 #else
@@ -333,7 +304,7 @@ int main(int argc, char* argv[]){
   
   // calculating initial norm (~ total energy)
   norm_ini=integral(nx, ny, temp, lx, ly);
-  printf(" Initial integral value: %f\n", norm_ini);
+  printf(" Initial integral value: %lg\n", norm_ini);
   
   fp = fopen("heat_diffusion.dat", "w");
 
@@ -348,32 +319,24 @@ int main(int argc, char* argv[]){
       t_sum += t_end - t_start;
       t_start = seconds();
     }
+
     // performing TFSC-FD step and updating boundaries
     evolve(nx, ny, lx, ly, dt, temp, temp_new, alpha);
     update_boundaries_FLAT(nx, ny, temp);
 
-    // for(i = 1; i < nx + 1; i++){
-    //   for(j = 1; j < ny + 1; j++)
-    // 	printf("\t%f", temp[j + i*(ny + 2)]);
+    // for(i = 0; i < nx + 2; i++){
+    //   for(j = 0; j < ny + 2; j++)
+    // 	printf("\t%lg", temp[j + i*(ny + 2)]);
     //   printf("\n");
     // }
-    // exit(0);
-
-    // for(i = 1; i < nx + 1; i++){
-    //   for(j = 1; j < ny + 1; j++)
-    // 	printf("\t%f", temp[j + i*(ny + 2)]);
-    //   printf("\n");
-    // }
-    
-    // save_gnuplot(fp, temp, nx, ny, lx, ly);
-    
+    // exit(0);    
   }
   t_end = seconds();
   t_sum += t_end - t_start;
   
   // checking final norm (~total energy)
   norm=integral(nx, ny, temp, lx, ly); 
-  printf(" Integral end: %f\n",norm);
+  printf(" Integral end: %lg\n",norm);
 #ifdef LINK_OMP
   printf("\t-----------------------\n");
   printf("\tNumber of threads: %d\n", omp_get_max_threads());

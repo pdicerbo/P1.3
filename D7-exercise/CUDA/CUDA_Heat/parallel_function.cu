@@ -1,4 +1,4 @@
-typedef float MYFLOAT;
+typedef double MYFLOAT;
 
 #define PI 3.14159265359
 
@@ -10,34 +10,24 @@ __device__ MYFLOAT gpu_iy2y(int iy, int ny, MYFLOAT ly){
   return ((iy) - ny / 2.0)*ly/ny;
 }
 
-__global__ void update_up_down(int nx, int ny, MYFLOAT *temp){
+__global__ void eff_update_up_down(int nx, int ny, MYFLOAT *temp){
 
   int ix;
   
-  ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
+  ix = threadIdx.x + blockIdx.x * blockDim.x;
 
-  temp[ix] = temp[ix + blockDim.x * gridDim.x + 2];
+  temp[ix] = temp[ix + nx + 2]; //blockDim.x * gridDim.x];
   temp[(ny + 1) * (nx + 2) + ix] = temp[ny * (nx + 2) + ix];
-
-  // ix = threadIdx.x + blockIdx.x * blockDim.x;
-
-  // temp[ix] = temp[ix + blockDim.x * gridDim.x];
-  // temp[(ny + 1) * (nx + 2) + ix] = temp[ny * (nx + 2) + ix];
 }
 
-__global__ void update_left_right(int nx, int ny, MYFLOAT *temp){
+__global__ void eff_update_left_right(int nx, int ny, MYFLOAT *temp){
 
   int ix;
   
-  ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
+  ix = threadIdx.x + blockIdx.x * blockDim.x;
 
   temp[ix * (nx + 2)] = temp[ix * (nx + 2) + 1];
   temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx];
-
-  // ix = threadIdx.x + blockIdx.x * blockDim.x;
-
-  // temp[ix * (nx + 2)] = temp[ix * (nx + 2) + 1];
-  // temp[ix * (nx + 2) + nx + 1] = temp[ix * (nx + 2) + nx];
 }
 
 __global__ void efficient_parallel_init(MYFLOAT *temp, int nx, int ny, MYFLOAT lx, MYFLOAT ly, MYFLOAT x0, MYFLOAT y0, MYFLOAT sigmax, MYFLOAT sigmay){ 
