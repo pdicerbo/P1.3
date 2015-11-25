@@ -9,5 +9,5 @@ cd $PBS_O_WORKDIR
 
 module load cudatoolkit/6.5
 
-./Heat_equation_serial.x 1000 0.00001
+./Heat_equation_serial.x 3000 0.00001
 

@@ -23,12 +23,13 @@
 typedef float MYFLOAT;
 
 #ifdef __CUDA
-#define BLOCKS 5
-#define THREADS 2
+#define BLOCKS 10
+#define THREADS 10
 __global__ void parallel_init(MYFLOAT*, int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT);
 __global__ void update_up_down(int, int, MYFLOAT*);
 __global__ void update_left_right(int, int, MYFLOAT*);
 __global__ void parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
+__global__ void efficient_parallel_evolve(int, int, MYFLOAT, MYFLOAT, MYFLOAT, MYFLOAT*, MYFLOAT*, MYFLOAT);
 #endif
 
 /* 
@@ -186,11 +187,11 @@ int main(int argc, char* argv[]){
     }
   
   // number of points in the x directions
-  nx = 10; //4000;
+  nx = 100; //4000;
   nCols= nx + 2;
   
   // number of points in the y directions
-  ny = 10; //4000;
+  ny = 100; //4000;
   nRows= ny + 2;
   
   // size of the system in the x direction
@@ -230,6 +231,9 @@ int main(int argc, char* argv[]){
   dim3 blocks(BLOCKS, BLOCKS);
   dim3 threads(THREADS, THREADS);
 
+  dim3 ev_blocks(BLOCKS, BLOCKS);
+  dim3 ev_threads(THREADS + 2, THREADS + 2);
+
   parallel_init<<<blocks, threads>>>(dev_temp, nx, ny, lx, ly, x0, y0, sigmax, sigmay);
   update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
   update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp);
@@ -248,13 +252,17 @@ int main(int argc, char* argv[]){
     // saving a snapshot every 100 time steps
     if ( (i-1)%frame==0){
       t_end = seconds();
-      cudaMemcpy(temp, dev_temp_new, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
+      cudaMemcpy(temp, dev_temp, nRows * nCols * sizeof(MYFLOAT), cudaMemcpyDeviceToHost);
       save_gnuplot(fp, temp, nx, ny, lx, ly);
       t_sum += t_end - t_start;
       t_start = seconds();
     }
     // performing TFSC-FD step and updating boundaries
-    parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
+
+    // parallel_evolve<<<blocks, threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
+
+    efficient_parallel_evolve<<<ev_blocks, ev_threads, (THREADS + 2) * (THREADS + 2) * sizeof(MYFLOAT)>>>(nx, ny, lx, ly, dt, dev_temp, dev_temp_new, alpha);
+
     update_up_down<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
     update_left_right<<<BLOCKS, THREADS>>>(nx, ny, dev_temp_new);
     
