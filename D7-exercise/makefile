@@ -8,7 +8,7 @@ EXEC = hello_world.x Heat_equation_serial.x OptMatTransp.x Heat_equation_paralle
 all: $(EXEC)
 
 omp: LIBS += -fopenmp
-omp: CFLAGS += -fopenmp -DLINK_OMP
+omp: CFLAGS += -fopenmp -DLINK_OMP #-DVERBOSE
 omp: all
 
 Heat_equation_parallel.x : Heat_equation_parallel.c

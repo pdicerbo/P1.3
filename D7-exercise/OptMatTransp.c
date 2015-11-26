@@ -130,7 +130,7 @@ void optimized_mm(double* A, double* B, double* C, double* tmp, int size){
 int main(int argc, char* argv[]){
 
   int block_size, fact, mat_size, i, j;
-  double *matrix, *transp, *tmp, *opt_m;
+  double *matrix, *transp, *tmp; //, *opt_m;;
   /* double *mmult, *mm_tmp; */
   double t_start, t_end;
 #ifdef LINK_OMP
@@ -148,10 +148,12 @@ int main(int argc, char* argv[]){
 
   mat_size = block_size * fact;
 
+  printf("\n\tAllocation of matrices");
   matrix = (double *)malloc(mat_size * mat_size * sizeof(double));
   transp = (double *)malloc(mat_size * mat_size * sizeof(double));
-  opt_m  = (double *)calloc(mat_size * sizeof(double), mat_size * sizeof(double));
+  // opt_m  = (double *)calloc(mat_size * sizeof(double), mat_size * sizeof(double));
   tmp    = (double *)malloc(block_size * block_size * sizeof(double));
+  printf("\n\tAllocation done");
 
   /* matrix initialization */
   for(i = 0; i < mat_size; i++)
@@ -210,8 +212,9 @@ int main(int argc, char* argv[]){
 
   free(matrix);
   free(transp);
-  free(tmp);
-  free(opt_m);
+
+  /* free(tmp); */
+  /* free(opt_m); */
 
   /* free(mmult); */
   /* free(mm_tmp); */
