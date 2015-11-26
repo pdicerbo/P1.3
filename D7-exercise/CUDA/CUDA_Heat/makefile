@@ -1,7 +1,7 @@
 CC = gcc
 NVCC = nvcc
 LIBS = -lm
-CFLAGS = 
+CFLAGS = -O3
 SRC = Heat_equation_serial.cu parallel_function.cu
 OBJS = ${SRC:.cu=.o}
 EXEC = Heat_equation_serial.x
